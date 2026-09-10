@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <p class="sottotitolo">Trova il tuo tavolo, condividi gli interessi</p>
+        <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo') }}">+ Crea un tavolo</a>
+    </header>
+
+    <main>
+        {% if tavoli|length == 0 %}
+            <p class="vuoto">Nessun tavolo disponibile al momento. Creane uno tu!</p>
+        {% endif %}
+
+        <div class="lista-tavoli">
+            {% for t in tavoli %}
+            <div class="card-tavolo">
+                <h2>{{ t.tema }}</h2>
+                <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}</p>
+                <p class="data">🗓️ {{ t.data_ora }}</p>
+                {% if t.obiettivo %}
+                <p class="obiettivo">🎯 {{ t.obiettivo }}</p>
+                {% endif %}
+                <p class="organizzatore">Organizzato da: {{ t.organizzatore_nome or "Anonimo" }}</p>
+                <p class="posti">{{ t.iscritti }} / {{ t.posti_totali }} posti occupati</p>
+
+                <form action="{{ url_for('iscriviti', tavolo_id=t.id) }}" method="POST">
+                    <button type="submit" class="btn-iscriviti" {% if t.iscritti >= t.posti_totali %}disabled{% endif %}>
+                        {% if t.iscritti >= t.posti_totali %}Completo{% else %}Iscriviti{% endif %}
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+</body>
+</html>
