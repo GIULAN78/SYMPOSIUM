@@ -1,0 +1,4 @@
+venv/
+symposium.db
+__pycache__/
+*.pyc
