@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ u.nome }} - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <div class="card-tavolo">
+            <h2>{{ u.nome }}</h2>
+            <p>{% if u.data_nascita|eta %}{{ u.data_nascita|eta }} anni{% endif %}{% if u.citta %}, {{ u.citta }}{% endif %}</p>
+
+            <div class="statistiche">
+                <div><strong>{{ organizzati }}</strong><span>organizzatore</span></div>
+                <div><strong>{{ partecipato }}</strong><span>partecipante</span></div>
+            </div>
+
+            {% if mio %}
+                <a class="btn-nuovo" href="{{ url_for('modifica_profilo') }}">Modifica profilo</a>
+            {% endif %}
+        </div>
+
+        <div class="card-tavolo scheda">
+            {% if u.professione %}<p class="etichetta">Professione</p><p>{{ u.professione }}</p>{% endif %}
+            {% if u.formazione %}<p class="etichetta">Formazione</p><p>{{ u.formazione }}</p>{% endif %}
+            {% if u.bio %}<p class="etichetta">Qualcosa su di me</p><p class="descrizione">{{ u.bio }}</p>{% endif %}
+
+            {% if interessi %}
+                <p class="etichetta">Interessi{% if not mio and utente_nome %} ({{ n_comune }} in comune){% endif %}</p>
+                <div class="tag-lista">
+                    {% for i in interessi %}
+                        <span class="tag {% if i.comune and not mio %}tag-comune{% endif %}">{{ i.nome }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

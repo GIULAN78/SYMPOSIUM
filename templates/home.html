@@ -14,7 +14,7 @@
         <h1>Symposium</h1>
         <p class="sottotitolo">Trova il tuo tavolo, condividi gli interessi</p>
         {% if utente_nome %}
-            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('miei_tavoli') }}">I miei tavoli</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
+            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('profilo_utente', utente_id=utente_id) }}">Profilo</a> · <a href="{{ url_for('miei_tavoli') }}">I miei tavoli</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
             <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo') }}">+ Crea un tavolo</a>
         {% else %}
             <p class="nav-utente"><a href="{{ url_for('accedi') }}">Accedi</a> · <a href="{{ url_for('registrati') }}">Registrati</a></p>
@@ -29,32 +29,39 @@
         <form class="form-ricerca" method="GET" action="{{ url_for('home') }}">
             <input type="text" name="q" value="{{ q }}" placeholder="Cerca per tema, locale, obiettivo...">
             <input type="text" name="citta" value="{{ citta }}" placeholder="Città">
+            {% if utente_nome %}
+            <label class="filtro"><input type="checkbox" name="eta" value="1" {% if solo_eta %}checked{% endif %}> Della mia età</label>
+            {% endif %}
+            <label class="filtro"><input type="checkbox" name="confermati" value="1" {% if solo_confermati %}checked{% endif %}> Confermati</label>
             <button type="submit" class="btn-iscriviti">Cerca</button>
-            {% if q or citta %}<a class="link-dettaglio" href="{{ url_for('home') }}">Azzera</a>{% endif %}
+            {% if q or citta or solo_eta or solo_confermati %}<a class="link-dettaglio" href="{{ url_for('home') }}">Azzera</a>{% endif %}
         </form>
 
         {% if tavoli|length == 0 %}
-            <p class="vuoto">{% if q or citta %}Nessun tavolo corrisponde alla ricerca.{% else %}Nessun tavolo disponibile al momento. Creane uno tu!{% endif %}</p>
+            <p class="vuoto">{% if q or citta or solo_eta or solo_confermati %}Nessun tavolo corrisponde alla ricerca.{% else %}Nessun tavolo disponibile al momento. Creane uno tu!{% endif %}</p>
         {% endif %}
 
         <div class="lista-tavoli">
             {% for t in tavoli %}
             <div class="card-tavolo">
-                <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a></h2>
+                <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}</h2>
                 <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}</p>
                 <p class="data">🗓️ {{ t.data_ora|data_it }}</p>
+                {% if t.eta_min is not none and t.eta_max is not none %}
+                <p>👥 Età {{ t.eta_min }}-{{ t.eta_max }}</p>
+                {% endif %}
                 {% if t.obiettivo %}
                 <p class="obiettivo">🎯 {{ t.obiettivo }}</p>
                 {% endif %}
                 <p class="organizzatore">Organizzato da: {{ t.organizzatore_nome or "Anonimo" }}</p>
-                <p class="posti">{{ t.iscritti }} / {{ t.posti_totali }} posti occupati</p>
+                <p class="posti">{{ t.iscritti }} / {{ t.posti_totali }} posti occupati{% if t.min_partecipanti %} · minimo {{ t.min_partecipanti }}{% endif %}</p>
 
                 {% if t.gia_iscritto %}
                     <button class="btn-iscriviti" disabled>Sei iscritto ✓</button>
                 {% else %}
                 <form action="{{ url_for('iscriviti', tavolo_id=t.id) }}" method="POST">
                     <button type="submit" class="btn-iscriviti" {% if t.iscritti >= t.posti_totali %}disabled{% endif %}>
-                        {% if t.iscritti >= t.posti_totali %}Completo{% else %}Iscriviti{% endif %}
+                        {% if t.iscritti >= t.posti_totali %}Completo{% else %}Partecipa{% endif %}
                     </button>
                 </form>
                 {% endif %}

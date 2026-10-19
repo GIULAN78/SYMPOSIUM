@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modifica profilo - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('profilo_utente', utente_id=utente_id) }}">← Torna al profilo</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+        <form class="form-tavolo" method="POST" action="{{ url_for('modifica_profilo') }}">
+            <label for="nome">Nome</label>
+            <input type="text" id="nome" name="nome" value="{{ u.nome }}" required>
+
+            <label for="data_nascita">Data di nascita</label>
+            <input type="date" id="data_nascita" name="data_nascita" value="{{ u.data_nascita or '' }}" required>
+
+            <label for="citta">Città</label>
+            <input type="text" id="citta" name="citta" value="{{ u.citta or '' }}">
+
+            <label for="professione">Professione</label>
+            <input type="text" id="professione" name="professione" value="{{ u.professione or '' }}">
+
+            <label for="formazione">Formazione</label>
+            <input type="text" id="formazione" name="formazione" value="{{ u.formazione or '' }}">
+
+            <label for="bio">Qualcosa su di me</label>
+            <textarea id="bio" name="bio" rows="4">{{ u.bio or '' }}</textarea>
+
+            <label for="interessi">Interessi (separati da virgola)</label>
+            <input type="text" id="interessi" name="interessi" value="{{ u.interessi or '' }}">
+
+            <button type="submit" class="btn-nuovo">Salva profilo</button>
+        </form>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

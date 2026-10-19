@@ -298,3 +298,73 @@ main {
     font-style: italic;
     white-space: pre-line;
 }
+
+.badge-conf {
+    background: #2e7d4f;
+    color: #fff;
+    vertical-align: middle;
+}
+
+.filtro {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--avorio);
+    font-size: 0.9rem;
+}
+
+.statistiche {
+    display: flex;
+    gap: 2rem;
+    margin: 1rem 0;
+}
+
+.statistiche div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.statistiche strong {
+    font-size: 1.6rem;
+    color: var(--notte);
+}
+
+.statistiche span {
+    font-size: 0.8rem;
+    color: #5a5f78;
+}
+
+.scheda {
+    margin-top: 1.2rem;
+}
+
+.etichetta {
+    margin-top: 0.9rem !important;
+    font-size: 0.8rem !important;
+    color: #5a5f78;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.tag-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+}
+
+.tag {
+    padding: 0.25rem 0.8rem;
+    border: 1px solid var(--avorio-scuro);
+    border-radius: 14px;
+    background: #fffaf0;
+    font-size: 0.85rem;
+}
+
+.tag-comune {
+    background: var(--oro);
+    border-color: var(--oro);
+    color: var(--notte);
+    font-weight: bold;
+}

@@ -21,17 +21,23 @@
         {% endwith %}
 
         <div class="card-tavolo">
-            <h2>{{ tavolo.tema }}</h2>
+            <h2>{{ tavolo.tema }}{% if confermato %} <span class="badge badge-conf">Confermato</span>{% endif %}</h2>
             <p class="locale">📍 {{ tavolo.locale_nome or "Locale da definire" }}{% if tavolo.citta %}, {{ tavolo.citta }}{% endif %}</p>
             <p class="data">🗓️ {{ tavolo.data_ora|data_it }}</p>
+            {% if tavolo.eta_min is not none and tavolo.eta_max is not none %}
+            <p>👥 Età ammessa: {{ tavolo.eta_min }}-{{ tavolo.eta_max }}</p>
+            {% endif %}
+            {% if tavolo.min_partecipanti %}
+            <p>📋 Condizioni: minimo {{ tavolo.min_partecipanti }} partecipanti</p>
+            {% endif %}
             {% if tavolo.obiettivo %}
             <p class="obiettivo">🎯 {{ tavolo.obiettivo }}</p>
             {% endif %}
             {% if tavolo.descrizione %}
             <p class="descrizione">{{ tavolo.descrizione }}</p>
             {% endif %}
-            <p class="organizzatore">Organizzato da: {{ tavolo.organizzatore_nome or "Anonimo" }}</p>
-            <p class="posti">{{ partecipanti|length }} / {{ tavolo.posti_totali }} posti occupati</p>
+            <p class="organizzatore">Organizzato da: <a href="{{ url_for('profilo_utente', utente_id=tavolo.organizzatore_id) }}">{{ tavolo.organizzatore_nome or "Anonimo" }}</a></p>
+            <p class="posti">{{ partecipanti|length }} / {{ tavolo.posti_totali }} posti occupati{% if eta_media %} · Range {{ range_eta[0] }}-{{ range_eta[1] }}, età media ~{{ eta_media }}{% endif %}</p>
 
             {% if not utente_nome %}
                 <p class="link-alt"><a href="{{ url_for('accedi') }}">Accedi</a> per iscriverti a questo tavolo.</p>
@@ -48,18 +54,18 @@
             {% else %}
                 <form action="{{ url_for('iscriviti', tavolo_id=tavolo.id) }}" method="POST">
                     <button type="submit" class="btn-iscriviti" {% if completo %}disabled{% endif %}>
-                        {% if completo %}Completo{% else %}Iscriviti{% endif %}
+                        {% if completo %}Completo{% else %}Partecipa{% endif %}
                     </button>
                 </form>
             {% endif %}
         </div>
 
-        <h3 class="titolo-sezione">Partecipanti</h3>
+        <h3 class="titolo-sezione">Partecipanti ({{ partecipanti|length }}/{{ tavolo.posti_totali }})</h3>
         <div class="lista-partecipanti">
             {% for p in partecipanti %}
             <div class="partecipante">
-                <strong>{{ p.nome }}</strong>{% if p.id == tavolo.organizzatore_id %} <span class="badge">organizzatore</span>{% endif %}
-                {% if p.interessi %}<p class="interessi">{{ p.interessi }}</p>{% endif %}
+                <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=p.id) }}"><strong>{{ p.nome }}</strong></a>{% if p.id == tavolo.organizzatore_id %} <span class="badge">organizzatore</span>{% endif %}
+                <p class="interessi">{% if p.eta %}{{ p.eta }} anni{% endif %}{% if p.citta %}, {{ p.citta }}{% endif %}{% if utente_nome and p.id != utente_id %} · {{ p.in_comune }} interessi in comune{% endif %}</p>
             </div>
             {% endfor %}
         </div>
