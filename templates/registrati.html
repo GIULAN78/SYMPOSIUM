@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrati - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+        <form class="form-tavolo" method="POST" action="{{ url_for('registrati') }}">
+            <label for="nome">Nome</label>
+            <input type="text" id="nome" name="nome" required>
+
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required>
+
+            <label for="password">Password (min. 6 caratteri)</label>
+            <input type="password" id="password" name="password" minlength="6" required>
+
+            <label for="interessi">Interessi (opzionale)</label>
+            <input type="text" id="interessi" name="interessi" placeholder="Es. storia, cinema, cucina">
+
+            <button type="submit" class="btn-nuovo">Crea account</button>
+            <p class="link-alt">Hai già un account? <a href="{{ url_for('accedi') }}">Accedi</a></p>
+        </form>
+    </main>
+</body>
+</html>
