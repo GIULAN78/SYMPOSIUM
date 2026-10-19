@@ -1,18 +1,191 @@
+:root {
+    --notte: #0b1437;
+    --notte-chiaro: #17265a;
+    --oro: #d4af37;
+    --oro-chiaro: #ecd27a;
+    --avorio: #f7efdc;
+    --avorio-scuro: #e8dbbb;
+    --bordeaux: #7a1f2b;
+    --testo: #1a1f3a;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Georgia, "Times New Roman", serif;
+}
+
+body {
+    background: linear-gradient(180deg, var(--notte) 0%, var(--notte-chiaro) 100%);
+    background-attachment: fixed;
+    color: var(--testo);
+    min-height: 100vh;
+}
+
+a {
+    color: var(--bordeaux);
+}
+
+header {
+    background: linear-gradient(180deg, #060b24 0%, var(--notte) 100%);
+    color: var(--avorio);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    border-bottom: 2px solid var(--oro);
+}
+
+header h1 {
+    font-size: 2.4rem;
+    letter-spacing: 4px;
+    color: var(--oro);
+    text-transform: uppercase;
+}
+
+.sottotitolo {
+    margin-top: 0.5rem;
+    opacity: 0.9;
+    font-style: italic;
+    color: var(--avorio);
+}
 
 .nav-utente {
     margin-top: 0.6rem;
     font-size: 0.95rem;
+    color: var(--avorio);
 }
 
 .nav-utente a {
-    color: #d4af37;
+    color: var(--oro-chiaro);
     font-weight: bold;
 }
 
+.btn-nuovo, .btn-indietro {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.6rem 1.4rem;
+    background: var(--oro);
+    color: var(--notte);
+    text-decoration: none;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-nuovo:hover, .btn-indietro:hover {
+    background: var(--oro-chiaro);
+}
+
+main {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.vuoto {
+    text-align: center;
+    color: var(--avorio-scuro);
+    margin-top: 3rem;
+    font-style: italic;
+}
+
+.lista-tavoli {
+    display: grid;
+    gap: 1.2rem;
+}
+
+.card-tavolo {
+    background: var(--avorio);
+    border: 1px solid var(--oro);
+    border-left: 5px solid var(--oro);
+    border-radius: 10px;
+    padding: 1.2rem 1.5rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.card-tavolo h2 {
+    color: var(--notte);
+    margin-bottom: 0.5rem;
+}
+
+.card-tavolo p {
+    margin: 0.3rem 0;
+    font-size: 0.95rem;
+}
+
+.btn-iscriviti {
+    margin-top: 0.8rem;
+    padding: 0.5rem 1.2rem;
+    background: var(--notte);
+    color: var(--oro);
+    border: 1px solid var(--oro);
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-iscriviti:hover:not(:disabled) {
+    background: var(--notte-chiaro);
+}
+
+.btn-iscriviti:disabled {
+    background: #8c8f9e;
+    color: #e6e6ee;
+    border-color: #8c8f9e;
+    cursor: not-allowed;
+}
+
+.btn-annulla {
+    margin-top: 0.8rem;
+    padding: 0.5rem 1.2rem;
+    background: transparent;
+    color: var(--bordeaux);
+    border: 2px solid var(--bordeaux);
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-annulla:hover {
+    background: var(--bordeaux);
+    color: var(--avorio);
+}
+
+.form-tavolo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    background: var(--avorio);
+    padding: 1.5rem;
+    border-radius: 10px;
+    border: 1px solid var(--oro);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.form-tavolo label {
+    margin-top: 0.8rem;
+    font-weight: bold;
+    font-size: 0.9rem;
+    color: var(--notte);
+}
+
+.form-tavolo input {
+    padding: 0.5rem;
+    border: 1px solid var(--avorio-scuro);
+    background: #fffaf0;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.form-tavolo input:focus, .form-ricerca input:focus {
+    outline: 2px solid var(--oro);
+}
+
 .flash {
-    background: #fff3cd;
-    border: 1px solid #d4af37;
-    color: #6b2d2d;
+    background: var(--avorio);
+    border-left: 5px solid var(--bordeaux);
+    color: var(--bordeaux);
     padding: 0.7rem 1rem;
     border-radius: 6px;
     margin-bottom: 1rem;
@@ -24,37 +197,31 @@
 }
 
 .link-alt a {
-    color: #6b2d2d;
+    color: var(--bordeaux);
     font-weight: bold;
 }
 
 .titolo-link {
-    color: #6b2d2d;
+    color: var(--notte);
     text-decoration: none;
+}
+
+.titolo-link:hover {
+    color: var(--bordeaux);
 }
 
 .link-dettaglio {
     display: inline-block;
     margin-top: 0.8rem;
     margin-left: 1rem;
-    color: #6b2d2d;
+    color: var(--bordeaux);
     font-size: 0.9rem;
-}
-
-.btn-annulla {
-    margin-top: 0.8rem;
-    padding: 0.5rem 1.2rem;
-    background: #fff;
-    color: #6b2d2d;
-    border: 2px solid #6b2d2d;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
 }
 
 .titolo-sezione {
     margin: 1.8rem 0 0.8rem;
-    color: #6b2d2d;
+    color: var(--oro);
+    letter-spacing: 1px;
 }
 
 .lista-partecipanti {
@@ -63,79 +230,49 @@
 }
 
 .partecipante {
-    background: #fff;
-    border: 1px solid #e0dbd0;
+    background: var(--avorio);
+    border: 1px solid var(--oro);
     border-radius: 8px;
     padding: 0.7rem 1rem;
 }
 
 .partecipante .interessi {
     font-size: 0.85rem;
-    color: #666;
+    color: #5a5f78;
     margin-top: 0.2rem;
 }
 
 .badge {
-    background: #d4af37;
-    color: #2b2620;
+    background: var(--oro);
+    color: var(--notte);
     font-size: 0.7rem;
     padding: 0.1rem 0.5rem;
     border-radius: 10px;
     margin-left: 0.4rem;
 }
 
-.titolo-link {
-    color: #6b2d2d;
-    text-decoration: none;
+.form-ricerca {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
 }
 
-.link-dettaglio {
-    display: inline-block;
-    margin-top: 0.8rem;
-    margin-left: 1rem;
-    color: #6b2d2d;
-    font-size: 0.9rem;
-}
-
-.btn-annulla {
-    margin-top: 0.8rem;
-    padding: 0.5rem 1.2rem;
-    background: #fff;
-    color: #6b2d2d;
-    border: 2px solid #6b2d2d;
+.form-ricerca input {
+    flex: 1 1 180px;
+    padding: 0.55rem;
+    border: 1px solid var(--oro);
+    background: var(--avorio);
     border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
+    font-size: 1rem;
 }
 
-.titolo-sezione {
-    margin: 1.8rem 0 0.8rem;
-    color: #6b2d2d;
+.form-ricerca .btn-iscriviti {
+    margin-top: 0;
 }
 
-.lista-partecipanti {
-    display: grid;
-    gap: 0.6rem;
-}
-
-.partecipante {
-    background: #fff;
-    border: 1px solid #e0dbd0;
-    border-radius: 8px;
-    padding: 0.7rem 1rem;
-}
-
-.partecipante .interessi {
-    font-size: 0.85rem;
-    color: #666;
-    margin-top: 0.2rem;
-}
-
-.badge {
-    background: #d4af37;
-    color: #2b2620;
-    font-size: 0.7rem;
-    padding: 0.1rem 0.5rem;
-    border-radius: 10px;
-    margin-left: 0.4rem;
+.form-ricerca .link-dettaglio {
+    margin: 0;
+    color: var(--oro-chiaro);
 }
