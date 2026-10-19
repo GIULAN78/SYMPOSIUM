@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import sqlite3
@@ -111,6 +111,14 @@ def login_richiesto(f):
     return wrapper
 
 
+@app.template_filter("data_it")
+def data_it(valore):
+    try:
+        return datetime.fromisoformat(valore).strftime("%d/%m/%Y alle %H:%M")
+    except (ValueError, TypeError):
+        return valore
+
+
 @app.context_processor
 def utente_corrente():
     return {"utente_nome": session.get("utente_nome")}
@@ -132,6 +140,47 @@ def home():
     """, (session.get("utente_id", 0),)).fetchall()
     conn.close()
     return render_template("home.html", tavoli=tavoli)
+
+
+@app.route("/tavolo/<int:tavolo_id>")
+def dettaglio_tavolo(tavolo_id):
+    conn = get_db()
+    tavolo = esegui(conn, """
+        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.organizzatore_id,
+               l.nome AS locale_nome,
+               u.nome AS organizzatore_nome
+        FROM tavoli t
+        LEFT JOIN locali l ON t.locale_id = l.id
+        LEFT JOIN utenti u ON t.organizzatore_id = u.id
+        WHERE t.id = ?
+    """, (tavolo_id,)).fetchone()
+
+    if not tavolo:
+        conn.close()
+        abort(404)
+
+    partecipanti = esegui(conn, """
+        SELECT u.id, u.nome, u.interessi
+        FROM iscrizioni i
+        JOIN utenti u ON i.utente_id = u.id
+        WHERE i.tavolo_id = ?
+        ORDER BY i.id ASC
+    """, (tavolo_id,)).fetchall()
+    conn.close()
+
+    utente_id = session.get("utente_id")
+    gia_iscritto = any(p["id"] == utente_id for p in partecipanti)
+    sono_organizzatore = utente_id == tavolo["organizzatore_id"]
+    completo = len(partecipanti) >= tavolo["posti_totali"]
+
+    return render_template(
+        "tavolo.html",
+        tavolo=tavolo,
+        partecipanti=partecipanti,
+        gia_iscritto=gia_iscritto,
+        sono_organizzatore=sono_organizzatore,
+        completo=completo,
+    )
 
 
 @app.route("/registrati", methods=["GET", "POST"])
@@ -220,7 +269,7 @@ def nuovo_tavolo():
                (tavolo_id, utente_id, datetime.now().isoformat()))
         conn.commit()
         conn.close()
-        return redirect(url_for("home"))
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
     return render_template("nuovo_tavolo.html")
 
@@ -244,7 +293,29 @@ def iscriviti(tavolo_id):
         except IntegrityError:
             conn.rollback()
     conn.close()
-    return redirect(url_for("home"))
+    return redirect(request.referrer or url_for("home"))
+
+
+@app.route("/tavolo/<int:tavolo_id>/annulla", methods=["POST"])
+@login_richiesto
+def annulla_iscrizione(tavolo_id):
+    conn = get_db()
+    tavolo = esegui(conn, "SELECT organizzatore_id FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+
+    if not tavolo:
+        conn.close()
+        abort(404)
+
+    if tavolo["organizzatore_id"] == session["utente_id"]:
+        flash("L'organizzatore non può annullare l'iscrizione al proprio tavolo.")
+    else:
+        esegui(conn,
+               "DELETE FROM iscrizioni WHERE tavolo_id = ? AND utente_id = ?",
+               (tavolo_id, session["utente_id"]))
+        conn.commit()
+        flash("Iscrizione annullata.")
+    conn.close()
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
 if __name__ == "__main__":
