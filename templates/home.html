@@ -11,7 +11,7 @@
         <h1>Symposium</h1>
         <p class="sottotitolo">Trova il tuo tavolo, condividi gli interessi</p>
         {% if utente_nome %}
-            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('esci') }}">Esci</a></p>
+            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('miei_tavoli') }}">I miei tavoli</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
             <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo') }}">+ Crea un tavolo</a>
         {% else %}
             <p class="nav-utente"><a href="{{ url_for('accedi') }}">Accedi</a> · <a href="{{ url_for('registrati') }}">Registrati</a></p>

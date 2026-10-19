@@ -157,6 +157,27 @@ def home():
     return render_template("home.html", tavoli=tavoli, q=q, citta=citta)
 
 
+@app.route("/miei-tavoli")
+@login_richiesto
+def miei_tavoli():
+    utente_id = session["utente_id"]
+    conn = get_db()
+    tavoli = esegui(conn, """
+        SELECT t.id, t.tema, t.data_ora, t.posti_totali, t.citta, t.organizzatore_id,
+               l.nome AS locale_nome,
+               (SELECT COUNT(*) FROM iscrizioni x WHERE x.tavolo_id = t.id) AS iscritti
+        FROM tavoli t
+        JOIN iscrizioni i ON i.tavolo_id = t.id AND i.utente_id = ?
+        LEFT JOIN locali l ON t.locale_id = l.id
+        ORDER BY t.data_ora ASC
+    """, (utente_id,)).fetchall()
+    conn.close()
+
+    organizzati = [t for t in tavoli if t["organizzatore_id"] == utente_id]
+    partecipo = [t for t in tavoli if t["organizzatore_id"] != utente_id]
+    return render_template("miei_tavoli.html", organizzati=organizzati, partecipo=partecipo)
+
+
 @app.route("/tavolo/<int:tavolo_id>")
 def dettaglio_tavolo(tavolo_id):
     conn = get_db()
