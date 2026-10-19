@@ -191,7 +191,8 @@ def home():
         ORDER BY t.data_ora ASC
     """, (session.get("utente_id", 0), f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{citta}%")).fetchall()
 
-    mia_eta = eta_da((utente_per_id(conn, session.get("utente_id")) or {}).get("data_nascita") if session.get("utente_id") else None)
+    io = utente_per_id(conn, session.get("utente_id"))
+    mia_eta = eta_da(io["data_nascita"]) if io else None
     conn.close()
 
     if solo_eta and mia_eta is not None:
