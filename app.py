@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
+from flask import send_from_directory, Flask, render_template, request, redirect, url_for, session, flash, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import sqlite3
@@ -377,6 +377,14 @@ def elimina_tavolo(tavolo_id):
     conn.close()
     flash("Tavolo eliminato.")
     return redirect(url_for("home"))
+
+
+@app.route("/sw.js")
+def service_worker():
+    risposta = send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+    risposta.headers["Service-Worker-Allowed"] = "/"
+    risposta.headers["Cache-Control"] = "no-cache"
+    return risposta
 
 
 if __name__ == "__main__":
