@@ -76,16 +76,20 @@ def init_db():
             obiettivo TEXT,
             posti_totali INTEGER DEFAULT 6,
             creato_il TEXT,
-            citta TEXT
+            citta TEXT,
+            descrizione TEXT
         )
     """)
 
     if USA_PG:
         esegui(conn, "ALTER TABLE tavoli ADD COLUMN IF NOT EXISTS citta TEXT")
+        esegui(conn, "ALTER TABLE tavoli ADD COLUMN IF NOT EXISTS descrizione TEXT")
     else:
         colonne = [r["name"] for r in esegui(conn, "PRAGMA table_info(tavoli)").fetchall()]
         if "citta" not in colonne:
             esegui(conn, "ALTER TABLE tavoli ADD COLUMN citta TEXT")
+        if "descrizione" not in colonne:
+            esegui(conn, "ALTER TABLE tavoli ADD COLUMN descrizione TEXT")
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS iscrizioni (
@@ -144,10 +148,11 @@ def home():
         LEFT JOIN utenti u ON t.organizzatore_id = u.id
         WHERE (LOWER(t.tema) LIKE LOWER(?)
                OR LOWER(COALESCE(l.nome, '')) LIKE LOWER(?)
-               OR LOWER(COALESCE(t.obiettivo, '')) LIKE LOWER(?))
+               OR LOWER(COALESCE(t.obiettivo, '')) LIKE LOWER(?)
+               OR LOWER(COALESCE(t.descrizione, '')) LIKE LOWER(?))
           AND LOWER(COALESCE(t.citta, '')) LIKE LOWER(?)
         ORDER BY t.data_ora ASC
-    """, (session.get("utente_id", 0), f"%{q}%", f"%{q}%", f"%{q}%", f"%{citta}%")).fetchall()
+    """, (session.get("utente_id", 0), f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{citta}%")).fetchall()
     conn.close()
     return render_template("home.html", tavoli=tavoli, q=q, citta=citta)
 
@@ -156,7 +161,8 @@ def home():
 def dettaglio_tavolo(tavolo_id):
     conn = get_db()
     tavolo = esegui(conn, """
-        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.organizzatore_id, t.citta,
+        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.organizzatore_id,
+               t.citta, t.descrizione,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome
         FROM tavoli t
@@ -261,6 +267,7 @@ def nuovo_tavolo():
         citta = request.form.get("citta", "").strip()
         data_ora = request.form["data_ora"]
         obiettivo = request.form.get("obiettivo", "")
+        descrizione = request.form.get("descrizione", "").strip()
         posti = int(request.form.get("posti_totali", 6))
 
         conn = get_db()
@@ -272,9 +279,9 @@ def nuovo_tavolo():
 
         utente_id = session["utente_id"]
         tavolo_id = inserisci(conn, """
-            INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali, creato_il, citta)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (tema, locale_id, utente_id, data_ora, obiettivo, posti, datetime.now().isoformat(), citta))
+            INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali, creato_il, citta, descrizione)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (tema, locale_id, utente_id, data_ora, obiettivo, posti, datetime.now().isoformat(), citta, descrizione))
         esegui(conn,
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
@@ -327,6 +334,28 @@ def annulla_iscrizione(tavolo_id):
         flash("Iscrizione annullata.")
     conn.close()
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
+@app.route("/tavolo/<int:tavolo_id>/elimina", methods=["POST"])
+@login_richiesto
+def elimina_tavolo(tavolo_id):
+    conn = get_db()
+    tavolo = esegui(conn, "SELECT organizzatore_id FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+
+    if not tavolo:
+        conn.close()
+        abort(404)
+
+    if tavolo["organizzatore_id"] != session["utente_id"]:
+        conn.close()
+        abort(403)
+
+    esegui(conn, "DELETE FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,))
+    esegui(conn, "DELETE FROM tavoli WHERE id = ?", (tavolo_id,))
+    conn.commit()
+    conn.close()
+    flash("Tavolo eliminato.")
+    return redirect(url_for("home"))
 
 
 if __name__ == "__main__":

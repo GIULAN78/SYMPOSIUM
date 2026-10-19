@@ -19,10 +19,13 @@
 
         <div class="card-tavolo">
             <h2>{{ tavolo.tema }}</h2>
-            <p class="locale">📍 {{ tavolo.locale_nome or "Locale da definire" }}</p>
+            <p class="locale">📍 {{ tavolo.locale_nome or "Locale da definire" }}{% if tavolo.citta %}, {{ tavolo.citta }}{% endif %}</p>
             <p class="data">🗓️ {{ tavolo.data_ora|data_it }}</p>
             {% if tavolo.obiettivo %}
             <p class="obiettivo">🎯 {{ tavolo.obiettivo }}</p>
+            {% endif %}
+            {% if tavolo.descrizione %}
+            <p class="descrizione">{{ tavolo.descrizione }}</p>
             {% endif %}
             <p class="organizzatore">Organizzato da: {{ tavolo.organizzatore_nome or "Anonimo" }}</p>
             <p class="posti">{{ partecipanti|length }} / {{ tavolo.posti_totali }} posti occupati</p>
@@ -31,6 +34,10 @@
                 <p class="link-alt"><a href="{{ url_for('accedi') }}">Accedi</a> per iscriverti a questo tavolo.</p>
             {% elif sono_organizzatore %}
                 <button class="btn-iscriviti" disabled>Sei l'organizzatore</button>
+                <form action="{{ url_for('elimina_tavolo', tavolo_id=tavolo.id) }}" method="POST"
+                      onsubmit="return confirm('Eliminare definitivamente questo tavolo e tutte le iscrizioni?');">
+                    <button type="submit" class="btn-annulla">Elimina tavolo</button>
+                </form>
             {% elif gia_iscritto %}
                 <form action="{{ url_for('annulla_iscrizione', tavolo_id=tavolo.id) }}" method="POST">
                     <button type="submit" class="btn-annulla">Annulla iscrizione</button>

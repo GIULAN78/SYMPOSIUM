@@ -276,3 +276,25 @@ main {
     margin: 0;
     color: var(--oro-chiaro);
 }
+
+.form-tavolo textarea {
+    padding: 0.5rem;
+    border: 1px solid var(--avorio-scuro);
+    background: #fffaf0;
+    border-radius: 6px;
+    font-size: 1rem;
+    resize: vertical;
+}
+
+.form-tavolo textarea:focus {
+    outline: 2px solid var(--oro);
+}
+
+.descrizione {
+    margin: 0.8rem 0 !important;
+    padding: 0.7rem 1rem;
+    background: #fffaf0;
+    border-left: 3px solid var(--oro);
+    font-style: italic;
+    white-space: pre-line;
+}
