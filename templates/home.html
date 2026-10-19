@@ -23,15 +23,22 @@
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
 
+        <form class="form-ricerca" method="GET" action="{{ url_for('home') }}">
+            <input type="text" name="q" value="{{ q }}" placeholder="Cerca per tema, locale, obiettivo...">
+            <input type="text" name="citta" value="{{ citta }}" placeholder="Città">
+            <button type="submit" class="btn-iscriviti">Cerca</button>
+            {% if q or citta %}<a class="link-dettaglio" href="{{ url_for('home') }}">Azzera</a>{% endif %}
+        </form>
+
         {% if tavoli|length == 0 %}
-            <p class="vuoto">Nessun tavolo disponibile al momento. Creane uno tu!</p>
+            <p class="vuoto">{% if q or citta %}Nessun tavolo corrisponde alla ricerca.{% else %}Nessun tavolo disponibile al momento. Creane uno tu!{% endif %}</p>
         {% endif %}
 
         <div class="lista-tavoli">
             {% for t in tavoli %}
             <div class="card-tavolo">
                 <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a></h2>
-                <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}</p>
+                <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}</p>
                 <p class="data">🗓️ {{ t.data_ora|data_it }}</p>
                 {% if t.obiettivo %}
                 <p class="obiettivo">🎯 {{ t.obiettivo }}</p>

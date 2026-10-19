@@ -58,11 +58,6 @@ def init_db():
         )
     """)
 
-    if not USA_PG:
-        colonne = [r["name"] for r in esegui(conn, "PRAGMA table_info(utenti)").fetchall()]
-        if "password_hash" not in colonne:
-            esegui(conn, "ALTER TABLE utenti ADD COLUMN password_hash TEXT")
-
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS locali (
             id {pk},
@@ -80,9 +75,17 @@ def init_db():
             data_ora TEXT NOT NULL,
             obiettivo TEXT,
             posti_totali INTEGER DEFAULT 6,
-            creato_il TEXT
+            creato_il TEXT,
+            citta TEXT
         )
     """)
+
+    if USA_PG:
+        esegui(conn, "ALTER TABLE tavoli ADD COLUMN IF NOT EXISTS citta TEXT")
+    else:
+        colonne = [r["name"] for r in esegui(conn, "PRAGMA table_info(tavoli)").fetchall()]
+        if "citta" not in colonne:
+            esegui(conn, "ALTER TABLE tavoli ADD COLUMN citta TEXT")
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS iscrizioni (
@@ -126,9 +129,12 @@ def utente_corrente():
 
 @app.route("/")
 def home():
+    q = request.args.get("q", "").strip()
+    citta = request.args.get("citta", "").strip()
+
     conn = get_db()
     tavoli = esegui(conn, """
-        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali,
+        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.citta,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome,
                (SELECT COUNT(*) FROM iscrizioni i WHERE i.tavolo_id = t.id) AS iscritti,
@@ -136,17 +142,21 @@ def home():
         FROM tavoli t
         LEFT JOIN locali l ON t.locale_id = l.id
         LEFT JOIN utenti u ON t.organizzatore_id = u.id
+        WHERE (LOWER(t.tema) LIKE LOWER(?)
+               OR LOWER(COALESCE(l.nome, '')) LIKE LOWER(?)
+               OR LOWER(COALESCE(t.obiettivo, '')) LIKE LOWER(?))
+          AND LOWER(COALESCE(t.citta, '')) LIKE LOWER(?)
         ORDER BY t.data_ora ASC
-    """, (session.get("utente_id", 0),)).fetchall()
+    """, (session.get("utente_id", 0), f"%{q}%", f"%{q}%", f"%{q}%", f"%{citta}%")).fetchall()
     conn.close()
-    return render_template("home.html", tavoli=tavoli)
+    return render_template("home.html", tavoli=tavoli, q=q, citta=citta)
 
 
 @app.route("/tavolo/<int:tavolo_id>")
 def dettaglio_tavolo(tavolo_id):
     conn = get_db()
     tavolo = esegui(conn, """
-        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.organizzatore_id,
+        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.organizzatore_id, t.citta,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome
         FROM tavoli t
@@ -248,6 +258,7 @@ def nuovo_tavolo():
     if request.method == "POST":
         tema = request.form["tema"]
         locale_nome = request.form["locale"]
+        citta = request.form.get("citta", "").strip()
         data_ora = request.form["data_ora"]
         obiettivo = request.form.get("obiettivo", "")
         posti = int(request.form.get("posti_totali", 6))
@@ -261,9 +272,9 @@ def nuovo_tavolo():
 
         utente_id = session["utente_id"]
         tavolo_id = inserisci(conn, """
-            INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali, creato_il)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (tema, locale_id, utente_id, data_ora, obiettivo, posti, datetime.now().isoformat()))
+            INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali, creato_il, citta)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (tema, locale_id, utente_id, data_ora, obiettivo, posti, datetime.now().isoformat(), citta))
         esegui(conn,
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
