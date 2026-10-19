@@ -4,8 +4,8 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "cambia-questa-chiave-in-produzione"
-DB_PATH = os.path.join(os.path.dirname(__file__), "symposium.db")
+app.secret_key = os.environ.get("SECRET_KEY", "chiave-di-sviluppo")
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "symposium.db")
 
 
 def get_db():
@@ -65,6 +65,9 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+
+init_db()
 
 
 @app.route("/")
@@ -135,5 +138,4 @@ def iscriviti(tavolo_id):
 
 
 if __name__ == "__main__":
-    init_db()
     app.run(debug=True, host="0.0.0.0", port=5000)
