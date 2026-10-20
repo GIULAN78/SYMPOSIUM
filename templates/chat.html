@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - {{ tavolo.tema }} - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('dettaglio_tavolo', tavolo_id=tavolo.id) }}">← Torna al tavolo</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <h3 class="titolo-sezione">💬 {{ tavolo.tema }}</h3>
+
+        <div id="chat-box" class="chat-box"
+             data-lista="{{ url_for('chat_messaggi', tavolo_id=tavolo.id) }}"></div>
+
+        <form id="chat-form" class="chat-form" method="POST" action="{{ url_for('chat_invia', tavolo_id=tavolo.id) }}">
+            <input type="text" id="chat-testo" name="testo" maxlength="1000" placeholder="Scrivi un messaggio..." autocomplete="off" required>
+            <button type="submit" class="btn-iscriviti">Invia</button>
+        </form>
+    </main>
+
+<script>
+(function () {
+    var box = document.getElementById("chat-box");
+    var form = document.getElementById("chat-form");
+    var campo = document.getElementById("chat-testo");
+    var urlLista = box.getAttribute("data-lista");
+    var ultimo = 0;
+    var primo = true;
+
+    function aggiungi(m) {
+        var riga = document.createElement("div");
+        riga.className = "msg" + (m.mio ? " msg-mio" : "");
+
+        var av;
+        if (m.foto_url) {
+            av = document.createElement("img");
+            av.src = m.foto_url;
+            av.alt = m.nome;
+            av.className = "avatar avatar-sm";
+        } else {
+            av = document.createElement("span");
+            av.className = "avatar avatar-vuoto avatar-sm";
+            av.textContent = (m.nome || "?").charAt(0).toUpperCase();
+        }
+
+        var bolla = document.createElement("div");
+        bolla.className = "bolla";
+
+        var autore = document.createElement("div");
+        autore.className = "msg-autore";
+        autore.textContent = m.nome + " · " + m.ora;
+
+        var testo = document.createElement("div");
+        testo.className = "msg-testo";
+        testo.textContent = m.testo;
+
+        bolla.appendChild(autore);
+        bolla.appendChild(testo);
+        riga.appendChild(av);
+        riga.appendChild(bolla);
+        box.appendChild(riga);
+    }
+
+    function carica() {
+        return fetch(urlLista + "?dopo=" + ultimo, { credentials: "same-origin" })
+            .then(function (r) { return r.ok ? r.json() : []; })
+            .then(function (dati) {
+                if (!dati.length) { return; }
+                var inFondo = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+                dati.forEach(aggiungi);
+                ultimo = dati[dati.length - 1].id;
+                if (primo || inFondo) { box.scrollTop = box.scrollHeight; }
+                primo = false;
+            })
+            .catch(function () {});
+    }
+
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var testo = campo.value.trim();
+        if (!testo) { return; }
+        campo.value = "";
+        fetch(form.action, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "X-Requested-With": "fetch" },
+            body: new FormData(form).has("testo") ? (function () {
+                var d = new FormData(); d.append("testo", testo); return d;
+            })() : null
+        }).then(carica).catch(function () { campo.value = testo; });
+    });
+
+    carica();
+    setInterval(carica, 4000);
+})();
+</script>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

@@ -434,3 +434,69 @@ main {
     max-height: 260px;
     object-fit: cover;
 }
+
+.chat-box {
+    background: var(--avorio);
+    border: 1px solid var(--oro);
+    border-radius: 10px;
+    height: 55vh;
+    overflow-y: auto;
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.msg {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    max-width: 85%;
+}
+
+.msg-mio {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.bolla {
+    background: #fffaf0;
+    border: 1px solid var(--avorio-scuro);
+    border-radius: 12px;
+    padding: 0.4rem 0.7rem;
+}
+
+.msg-mio .bolla {
+    background: var(--notte);
+    border-color: var(--notte);
+    color: var(--avorio);
+}
+
+.msg-autore {
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+.msg-testo {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.chat-form {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.8rem;
+}
+
+.chat-form input {
+    flex: 1;
+    padding: 0.6rem;
+    border: 1px solid var(--oro);
+    background: var(--avorio);
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.chat-form .btn-iscriviti {
+    margin-top: 0;
+}

@@ -51,11 +51,13 @@
                     <p class="link-alt"><a href="{{ url_for('accedi') }}">Accedi</a> per iscriverti a questo tavolo.</p>
                 {% elif sono_organizzatore %}
                     <button class="btn-iscriviti" disabled>Sei l'organizzatore</button>
+                    <a class="btn-nuovo" href="{{ url_for('chat_tavolo', tavolo_id=tavolo.id) }}">💬 Chat del tavolo</a>
                     <form action="{{ url_for('elimina_tavolo', tavolo_id=tavolo.id) }}" method="POST"
                           onsubmit="return confirm('Eliminare definitivamente questo tavolo e tutte le iscrizioni?');">
                         <button type="submit" class="btn-annulla">Elimina tavolo</button>
                     </form>
                 {% elif gia_iscritto %}
+                    <a class="btn-nuovo" href="{{ url_for('chat_tavolo', tavolo_id=tavolo.id) }}">💬 Chat del tavolo</a>
                     <form action="{{ url_for('annulla_iscrizione', tavolo_id=tavolo.id) }}" method="POST">
                         <button type="submit" class="btn-annulla">Annulla iscrizione</button>
                     </form>

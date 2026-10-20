@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, send_from_directory, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -170,6 +170,16 @@ def init_db():
             utente_id INTEGER REFERENCES utenti (id),
             iscritto_il TEXT,
             UNIQUE (tavolo_id, utente_id)
+        )
+    """)
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS messaggi (
+            id {pk},
+            tavolo_id INTEGER REFERENCES tavoli (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            testo TEXT NOT NULL,
+            creato_il TEXT
         )
     """)
 
@@ -349,6 +359,100 @@ def dettaglio_tavolo(tavolo_id):
         range_eta=range_eta,
         eta_media=eta_media,
     )
+
+
+def e_iscritto(conn, tavolo_id, utente_id):
+    riga = esegui(conn,
+                  "SELECT 1 AS ok FROM iscrizioni WHERE tavolo_id = ? AND utente_id = ?",
+                  (tavolo_id, utente_id)).fetchone()
+    return riga is not None
+
+
+def leggi_messaggi(conn, tavolo_id, dopo):
+    if dopo <= 0:
+        righe = esegui(conn, """
+            SELECT m.id, m.testo, m.creato_il, m.utente_id, u.nome, u.foto_url
+            FROM messaggi m JOIN utenti u ON u.id = m.utente_id
+            WHERE m.tavolo_id = ?
+            ORDER BY m.id DESC LIMIT 100
+        """, (tavolo_id,)).fetchall()
+        righe = list(reversed(righe))
+    else:
+        righe = esegui(conn, """
+            SELECT m.id, m.testo, m.creato_il, m.utente_id, u.nome, u.foto_url
+            FROM messaggi m JOIN utenti u ON u.id = m.utente_id
+            WHERE m.tavolo_id = ? AND m.id > ?
+            ORDER BY m.id ASC LIMIT 200
+        """, (tavolo_id, dopo)).fetchall()
+
+    uid = session.get("utente_id")
+    risultato = []
+    for r in righe:
+        try:
+            ora = datetime.fromisoformat(r["creato_il"]).strftime("%d/%m %H:%M")
+        except (ValueError, TypeError):
+            ora = ""
+        risultato.append({
+            "id": r["id"],
+            "testo": r["testo"],
+            "ora": ora,
+            "nome": r["nome"],
+            "foto_url": r["foto_url"],
+            "utente_id": r["utente_id"],
+            "mio": r["utente_id"] == uid,
+        })
+    return risultato
+
+
+@app.route("/tavolo/<int:tavolo_id>/chat")
+@login_richiesto
+def chat_tavolo(tavolo_id):
+    conn = get_db()
+    tavolo = esegui(conn, "SELECT id, tema FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    if not tavolo:
+        conn.close()
+        abort(404)
+    if not e_iscritto(conn, tavolo_id, session["utente_id"]):
+        conn.close()
+        flash("La chat è riservata ai partecipanti del tavolo.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    conn.close()
+    return render_template("chat.html", tavolo=tavolo)
+
+
+@app.route("/tavolo/<int:tavolo_id>/chat/messaggi")
+@login_richiesto
+def chat_messaggi(tavolo_id):
+    try:
+        dopo = int(request.args.get("dopo", 0))
+    except ValueError:
+        dopo = 0
+    conn = get_db()
+    if not e_iscritto(conn, tavolo_id, session["utente_id"]):
+        conn.close()
+        abort(403)
+    messaggi = leggi_messaggi(conn, tavolo_id, dopo)
+    conn.close()
+    return jsonify(messaggi)
+
+
+@app.route("/tavolo/<int:tavolo_id>/chat/invia", methods=["POST"])
+@login_richiesto
+def chat_invia(tavolo_id):
+    testo = request.form.get("testo", "").strip()[:1000]
+    conn = get_db()
+    if not e_iscritto(conn, tavolo_id, session["utente_id"]):
+        conn.close()
+        abort(403)
+    if testo:
+        esegui(conn,
+               "INSERT INTO messaggi (tavolo_id, utente_id, testo, creato_il) VALUES (?, ?, ?, ?)",
+               (tavolo_id, session["utente_id"], testo, datetime.now().isoformat()))
+        conn.commit()
+    conn.close()
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": True})
+    return redirect(url_for("chat_tavolo", tavolo_id=tavolo_id))
 
 
 @app.route("/registrati", methods=["GET", "POST"])
@@ -616,6 +720,7 @@ def elimina_tavolo(tavolo_id):
         conn.close()
         abort(403)
 
+    esegui(conn, "DELETE FROM messaggi WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM tavoli WHERE id = ?", (tavolo_id,))
     conn.commit()
