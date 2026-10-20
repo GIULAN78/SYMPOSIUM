@@ -29,6 +29,9 @@
                     {% if affidabilita %}
                     <p><span class="badge {% if affidabilita == 'Alta affidabilità' %}badge-conf{% elif affidabilita == 'Affidabilità bassa' %}badge-ass{% endif %}">{{ affidabilita }}</span></p>
                     {% endif %}
+                    {% if compat_label %}
+                    <p><span class="badge badge-grad">🤝 {{ compat_label }}</span></p>
+                    {% endif %}
                 </div>
             </div>
 

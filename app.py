@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, send_from_directory, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
+from markupsafe import escape
 from functools import wraps
 from PIL import Image, ImageOps, UnidentifiedImageError
 from zoneinfo import ZoneInfo
@@ -26,6 +27,37 @@ R2_BUCKET = os.environ.get("R2_BUCKET")
 R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL")
 R2_OK = all([R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_URL])
 _s3 = None
+
+CRITERI = [
+    ("descrizione", "Corrisponde alla descrizione"),
+    ("accogliente", "È accogliente"),
+    ("cibo", "Il cibo era buono"),
+    ("servizio", "Servizio cordiale e veloce"),
+    ("qualita_prezzo", "Buon rapporto qualità-prezzo"),
+]
+
+PREZZI = [
+    ("0-10", "0-10 €"),
+    ("10-25", "10-25 €"),
+    ("25-40", "25-40 €"),
+    ("40+", "Oltre 40 €"),
+]
+
+COMPAT = [
+    (5, "Molto compatibile"),
+    (4, "Compatibile"),
+    (3, "Neutra"),
+    (2, "Poco compatibile"),
+    (1, "Per niente"),
+]
+
+FASCE = [
+    ("mattina", "Mattina", "5:00-12:00"),
+    ("pranzo", "Pranzo", "12:00-15:30"),
+    ("pomeriggio", "Pomeriggio", "15:30-18:30"),
+    ("sera", "Sera", "18:30-22:30"),
+    ("seconda_serata", "Seconda serata", "22:30-5:00"),
+]
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "chiave-di-sviluppo")
@@ -195,6 +227,40 @@ def init_db():
             UNIQUE (tavolo_id, utente_id)
         )
     """)
+    aggiungi_colonna(conn, "valutazioni_locale", "fascia_prezzo", "TEXT")
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS valutazioni_criteri (
+            id {pk},
+            tavolo_id INTEGER REFERENCES tavoli (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            criterio TEXT NOT NULL,
+            voto INTEGER NOT NULL,
+            UNIQUE (tavolo_id, utente_id, criterio)
+        )
+    """)
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS presenze (
+            id {pk},
+            tavolo_id INTEGER REFERENCES tavoli (id),
+            segnalatore_id INTEGER REFERENCES utenti (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            presente INTEGER NOT NULL,
+            UNIQUE (tavolo_id, segnalatore_id, utente_id)
+        )
+    """)
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS compatibilita (
+            id {pk},
+            tavolo_id INTEGER REFERENCES tavoli (id),
+            da_utente INTEGER REFERENCES utenti (id),
+            a_utente INTEGER REFERENCES utenti (id),
+            punteggio INTEGER NOT NULL,
+            UNIQUE (tavolo_id, da_utente, a_utente)
+        )
+    """)
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS assenze (
@@ -224,6 +290,23 @@ def e_concluso(data_ora):
         return False
 
 
+def fascia_di(data_ora):
+    try:
+        d = datetime.fromisoformat(data_ora)
+    except (ValueError, TypeError):
+        return None
+    m = d.hour * 60 + d.minute
+    if 5 * 60 <= m < 12 * 60:
+        return "mattina"
+    if 12 * 60 <= m < 15 * 60 + 30:
+        return "pranzo"
+    if 15 * 60 + 30 <= m < 18 * 60 + 30:
+        return "pomeriggio"
+    if 18 * 60 + 30 <= m < 22 * 60 + 30:
+        return "sera"
+    return "seconda_serata"
+
+
 def affidabilita(assenze, partecipato):
     if not partecipato:
         return None
@@ -232,6 +315,18 @@ def affidabilita(assenze, partecipato):
     if assenze / partecipato <= 0.2:
         return "Affidabilità media"
     return "Affidabilità bassa"
+
+
+def etichetta_compat(media):
+    if media >= 4.5:
+        return "Molto compatibile"
+    if media >= 3.5:
+        return "Compatibile"
+    if media >= 2.5:
+        return "Neutra"
+    if media >= 1.5:
+        return "Poco compatibile"
+    return "Per niente compatibile"
 
 
 def eta_da(data_nascita):
@@ -283,36 +378,63 @@ def utente_corrente():
     return {"utente_nome": session.get("utente_nome"), "utente_id": session.get("utente_id")}
 
 
+@app.after_request
+def banner_valutazione(risposta):
+    try:
+        if (
+            "utente_id" not in session
+            or risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint in (None, "static", "feedback_tavolo", "service_worker")
+        ):
+            return risposta
+
+        uid = session["utente_id"]
+        conn = get_db()
+        righe = esegui(conn, """
+            SELECT t.id, t.tema, t.data_ora
+            FROM tavoli t
+            JOIN iscrizioni i ON i.tavolo_id = t.id AND i.utente_id = ?
+            WHERE NOT EXISTS (SELECT 1 FROM valutazioni_locale v WHERE v.tavolo_id = t.id AND v.utente_id = ?)
+              AND NOT EXISTS (SELECT 1 FROM assenze a WHERE a.tavolo_id = t.id AND a.utente_id = ?)
+            ORDER BY t.data_ora DESC
+        """, (uid, uid, uid)).fetchall()
+        conn.close()
+
+        pendenti = [r for r in righe if e_concluso(r["data_ora"])]
+        if not pendenti:
+            return risposta
+
+        primo = pendenti[0]
+        altre = len(pendenti) - 1
+        link = url_for("feedback_tavolo", tavolo_id=primo["id"])
+        extra = f" (e altre {altre})" if altre > 0 else ""
+        html = (
+            '<div class="banner-feedback">'
+            f'<span>📝 Com\'è andata la serata «{escape(primo["tema"])}»?{extra}</span>'
+            f'<a class="btn-nuovo" href="{link}">Valuta ora</a>'
+            '</div>'
+        )
+
+        testo = risposta.get_data(as_text=True)
+        if "<main>" in testo:
+            risposta.set_data(testo.replace("<main>", "<main>" + html, 1))
+    except Exception:
+        pass
+    return risposta
+
+
 def utente_per_id(conn, utente_id):
     if not utente_id:
         return None
     return esegui(conn, "SELECT * FROM utenti WHERE id = ?", (utente_id,)).fetchone()
 
 
-FASCE = [
-    ("mattina", "Mattina", "5:00-12:00"),
-    ("pranzo", "Pranzo", "12:00-15:30"),
-    ("pomeriggio", "Pomeriggio", "15:30-18:30"),
-    ("sera", "Sera", "18:30-22:30"),
-    ("seconda_serata", "Seconda serata", "22:30-5:00"),
-]
-
-
-def fascia_di(data_ora):
-    try:
-        d = datetime.fromisoformat(data_ora)
-    except (ValueError, TypeError):
-        return None
-    m = d.hour * 60 + d.minute
-    if 5 * 60 <= m < 12 * 60:
-        return "mattina"
-    if 12 * 60 <= m < 15 * 60 + 30:
-        return "pranzo"
-    if 15 * 60 + 30 <= m < 18 * 60 + 30:
-        return "pomeriggio"
-    if 18 * 60 + 30 <= m < 22 * 60 + 30:
-        return "sera"
-    return "seconda_serata"
+def e_iscritto(conn, tavolo_id, utente_id):
+    riga = esegui(conn,
+                  "SELECT 1 AS ok FROM iscrizioni WHERE tavolo_id = ? AND utente_id = ?",
+                  (tavolo_id, utente_id)).fetchone()
+    return riga is not None
 
 
 @app.route("/")
@@ -423,6 +545,32 @@ def dettaglio_tavolo(tavolo_id):
         r = esegui(conn, "SELECT voto FROM valutazioni_locale WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid)).fetchone()
         mio_voto = r["voto"] if r else None
 
+    stat_criteri = []
+    prezzo_top = None
+    if tavolo["locale_id"]:
+        rr = esegui(conn, """
+            SELECT c.criterio AS criterio, COUNT(*) AS n, COALESCE(SUM(c.voto), 0) AS pos
+            FROM valutazioni_criteri c
+            JOIN tavoli t ON t.id = c.tavolo_id
+            WHERE t.locale_id = ?
+            GROUP BY c.criterio
+        """, (tavolo["locale_id"],)).fetchall()
+        per = {r["criterio"]: (int(r["n"]), int(r["pos"])) for r in rr}
+        for chiave, etichetta in CRITERI:
+            if chiave in per:
+                n, pos = per[chiave]
+                stat_criteri.append({"etichetta": etichetta, "perc": int(round(pos * 100 / n)), "n": n})
+        rp = esegui(conn, """
+            SELECT fascia_prezzo, COUNT(*) AS n
+            FROM valutazioni_locale
+            WHERE locale_id = ? AND fascia_prezzo IS NOT NULL
+            GROUP BY fascia_prezzo
+            ORDER BY n DESC
+            LIMIT 1
+        """, (tavolo["locale_id"],)).fetchone()
+        if rp:
+            prezzo_top = dict(PREZZI).get(rp["fascia_prezzo"])
+
     io = utente_per_id(conn, uid)
     conn.close()
 
@@ -460,44 +608,97 @@ def dettaglio_tavolo(tavolo_id):
         concluso=concluso,
         puo_valutare=puo_valutare,
         mio_voto=mio_voto,
+        stat_criteri=stat_criteri,
+        prezzo_top=prezzo_top,
     )
 
 
-@app.route("/tavolo/<int:tavolo_id>/valuta-locale", methods=["POST"])
+def altri_presenti(conn, tavolo_id, uid):
+    return esegui(conn, """
+        SELECT u.id, u.nome, u.foto_url
+        FROM iscrizioni i
+        JOIN utenti u ON u.id = i.utente_id
+        WHERE i.tavolo_id = ? AND i.utente_id != ?
+          AND i.utente_id NOT IN (SELECT utente_id FROM assenze WHERE tavolo_id = ?)
+        ORDER BY i.id ASC
+    """, (tavolo_id, uid, tavolo_id)).fetchall()
+
+
+def controlla_feedback(conn, tavolo_id, uid):
+    tavolo = esegui(conn, """
+        SELECT t.id, t.tema, t.data_ora, t.locale_id, l.nome AS locale_nome
+        FROM tavoli t LEFT JOIN locali l ON l.id = t.locale_id
+        WHERE t.id = ?
+    """, (tavolo_id,)).fetchone()
+    if not tavolo:
+        abort(404)
+    if not e_iscritto(conn, tavolo_id, uid):
+        abort(403)
+    if not e_concluso(tavolo["data_ora"]):
+        return tavolo, "Potrai valutare la serata quando sarà conclusa."
+    if esegui(conn, "SELECT 1 AS ok FROM assenze WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid)).fetchone():
+        return tavolo, "Risulti assente a questa serata: non puoi valutarla."
+    if esegui(conn, "SELECT 1 AS ok FROM valutazioni_locale WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid)).fetchone():
+        return tavolo, "Hai già valutato questa serata."
+    return tavolo, None
+
+
+@app.route("/tavolo/<int:tavolo_id>/feedback", methods=["GET", "POST"])
 @login_richiesto
-def valuta_locale(tavolo_id):
-    voto = 1 if request.form.get("voto") == "1" else 0
+def feedback_tavolo(tavolo_id):
     uid = session["utente_id"]
     conn = get_db()
-    tavolo = esegui(conn, "SELECT data_ora, locale_id FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
-    if not tavolo:
+    tavolo, errore = controlla_feedback(conn, tavolo_id, uid)
+    if errore:
         conn.close()
-        abort(404)
-
-    if not e_concluso(tavolo["data_ora"]):
-        conn.close()
-        flash("Potrai valutare il locale dopo la serata.")
-        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
-    if not e_iscritto(conn, tavolo_id, uid):
-        conn.close()
-        abort(403)
-    assente = esegui(conn, "SELECT 1 AS ok FROM assenze WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid)).fetchone()
-    if assente:
-        conn.close()
-        flash("Non puoi valutare un locale se risulti assente.")
+        flash(errore)
         return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
-    try:
-        esegui(conn,
-               "INSERT INTO valutazioni_locale (tavolo_id, utente_id, locale_id, voto, creato_il) VALUES (?, ?, ?, ?, ?)",
-               (tavolo_id, uid, tavolo["locale_id"], voto, datetime.now().isoformat()))
+    altri = [dict(r) for r in altri_presenti(conn, tavolo_id, uid)]
+
+    if request.method == "POST":
+        complessivo = request.form.get("complessivo")
+        prezzo = request.form.get("prezzo")
+        if complessivo not in ("0", "1") or prezzo not in dict(PREZZI):
+            conn.close()
+            flash("Rispondi alla valutazione complessiva del locale e alla fascia di prezzo.")
+            return redirect(url_for("feedback_tavolo", tavolo_id=tavolo_id))
+
+        try:
+            esegui(conn, """
+                INSERT INTO valutazioni_locale (tavolo_id, utente_id, locale_id, voto, creato_il, fascia_prezzo)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (tavolo_id, uid, tavolo["locale_id"], int(complessivo), datetime.now().isoformat(), prezzo))
+        except IntegrityError:
+            conn.rollback()
+            conn.close()
+            flash("Hai già valutato questa serata.")
+            return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+        for chiave, _ in CRITERI:
+            v = request.form.get("crit_" + chiave)
+            if v in ("0", "1"):
+                esegui(conn, "INSERT INTO valutazioni_criteri (tavolo_id, utente_id, criterio, voto) VALUES (?, ?, ?, ?)",
+                       (tavolo_id, uid, chiave, int(v)))
+
+        for a in altri:
+            presente = request.form.get(f"presente_{a['id']}") == "1"
+            esegui(conn, "INSERT INTO presenze (tavolo_id, segnalatore_id, utente_id, presente) VALUES (?, ?, ?, ?)",
+                   (tavolo_id, uid, a["id"], 1 if presente else 0))
+            if presente:
+                p = request.form.get(f"compat_{a['id']}")
+                if p in ("1", "2", "3", "4", "5"):
+                    esegui(conn, "INSERT INTO compatibilita (tavolo_id, da_utente, a_utente, punteggio) VALUES (?, ?, ?, ?)",
+                           (tavolo_id, uid, a["id"], int(p)))
+
         conn.commit()
-        flash("Grazie per la valutazione!")
-    except IntegrityError:
-        conn.rollback()
-        flash("Hai già valutato questo locale.")
+        conn.close()
+        flash("Grazie! La tua valutazione è stata registrata.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
     conn.close()
-    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    return render_template("feedback.html", tavolo=tavolo, altri=altri,
+                           criteri=CRITERI, prezzi=PREZZI, compat=COMPAT)
 
 
 @app.route("/tavolo/<int:tavolo_id>/assenza/<int:utente_target>", methods=["POST"])
@@ -530,13 +731,6 @@ def segna_assenza(tavolo_id, utente_target):
     conn.commit()
     conn.close()
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
-
-
-def e_iscritto(conn, tavolo_id, utente_id):
-    riga = esegui(conn,
-                  "SELECT 1 AS ok FROM iscrizioni WHERE tavolo_id = ? AND utente_id = ?",
-                  (tavolo_id, utente_id)).fetchone()
-    return riga is not None
 
 
 def leggi_messaggi(conn, tavolo_id, dopo):
@@ -708,6 +902,12 @@ def profilo_utente(utente_id):
         WHERE i.utente_id = ? AND t.organizzatore_id != ?
     """, (utente_id, utente_id)).fetchone()["n"]
     assenze = esegui(conn, "SELECT COUNT(*) AS n FROM assenze WHERE utente_id = ?", (utente_id,)).fetchone()["n"]
+
+    rc = esegui(conn, "SELECT COUNT(*) AS n, AVG(punteggio) AS media FROM compatibilita WHERE a_utente = ?", (utente_id,)).fetchone()
+    compat_label = None
+    if rc and int(rc["n"]) >= 3 and rc["media"] is not None:
+        compat_label = etichetta_compat(float(rc["media"]))
+
     io = utente_per_id(conn, session.get("utente_id"))
     conn.close()
 
@@ -725,6 +925,7 @@ def profilo_utente(utente_id):
         partecipato=partecipato,
         assenze=assenze,
         affidabilita=affidabilita(assenze, partecipato),
+        compat_label=compat_label,
         mio=(session.get("utente_id") == utente_id),
     )
 
@@ -895,6 +1096,9 @@ def elimina_tavolo(tavolo_id):
         abort(403)
 
     esegui(conn, "DELETE FROM messaggi WHERE tavolo_id = ?", (tavolo_id,))
+    esegui(conn, "DELETE FROM valutazioni_criteri WHERE tavolo_id = ?", (tavolo_id,))
+    esegui(conn, "DELETE FROM compatibilita WHERE tavolo_id = ?", (tavolo_id,))
+    esegui(conn, "DELETE FROM presenze WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM valutazioni_locale WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM assenze WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,))

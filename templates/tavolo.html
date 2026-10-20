@@ -33,7 +33,15 @@
                 </p>
                 <p class="locale">📍 {{ tavolo.locale_nome or "Locale da definire" }}{% if tavolo.citta %}, {{ tavolo.citta }}{% endif %}
                     {% if tavolo.voti_locale %}<span class="badge badge-grad">👍 {{ tavolo.voti_pos|percento(tavolo.voti_locale) }}% ({{ tavolo.voti_locale }})</span>{% else %}<span class="nota">Nessuna valutazione</span>{% endif %}
+                    {% if prezzo_top %}<span class="badge badge-prezzo">💶 {{ prezzo_top }}</span>{% endif %}
                 </p>
+                {% if stat_criteri %}
+                <ul class="lista-stat">
+                    {% for s in stat_criteri %}
+                    <li>{{ s.etichetta }}: <strong>👍 {{ s.perc }}%</strong> <span class="nota">({{ s.n }})</span></li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
                 <p class="data">🗓️ {{ tavolo.data_ora|data_it }}</p>
                 {% if tavolo.eta_min is not none and tavolo.eta_max is not none %}
                 <p>👥 Età ammessa: {{ tavolo.eta_min }}-{{ tavolo.eta_max }}</p>
@@ -51,14 +59,11 @@
 
                 {% if puo_valutare %}
                 <div class="valuta">
-                    <p><strong>Com'è andata al {{ tavolo.locale_nome }}?</strong></p>
-                    <form action="{{ url_for('valuta_locale', tavolo_id=tavolo.id) }}" method="POST" class="valuta-form">
-                        <button type="submit" name="voto" value="1" class="btn-iscriviti">👍 Bene</button>
-                        <button type="submit" name="voto" value="0" class="btn-annulla">👎 Male</button>
-                    </form>
+                    <p><strong>Com'è andata la serata?</strong></p>
+                    <a class="btn-nuovo" href="{{ url_for('feedback_tavolo', tavolo_id=tavolo.id) }}">📝 Valuta la serata</a>
                 </div>
                 {% elif mio_voto is not none %}
-                <p class="nota">Hai valutato il locale: {{ '👍' if mio_voto == 1 else '👎' }}</p>
+                <p class="nota">Hai già valutato questa serata ✓</p>
                 {% endif %}
 
                 {% if not utente_nome %}

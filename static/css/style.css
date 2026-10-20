@@ -594,3 +594,103 @@ main {
     background: var(--oro);
     font-weight: bold;
 }
+
+.sezione-fb {
+    margin-bottom: 1.2rem;
+}
+
+.persona-fb {
+    padding: 0.7rem 0;
+    border-top: 1px solid var(--avorio-scuro);
+}
+
+.riga-presenza {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+}
+
+.compat-box {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding-left: 2rem;
+}
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.7rem;
+    border: 1px solid var(--avorio-scuro);
+    border-radius: 14px;
+    background: #fffaf0;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.pill:has(input:checked) {
+    background: var(--oro);
+    border-color: var(--oro);
+    color: var(--notte);
+    font-weight: bold;
+}
+
+.pill-salta {
+    opacity: 0.75;
+}
+
+.riga-crit {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--avorio-scuro);
+}
+
+.scelte {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.lista-stat {
+    list-style: none;
+    margin: 0.4rem 0 0.6rem;
+    padding: 0.5rem 0.8rem;
+    background: #fffaf0;
+    border-left: 3px solid var(--oro);
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.badge-prezzo {
+    background: var(--notte);
+    color: var(--oro);
+    margin-left: 0.4rem;
+}
+
+.banner-feedback {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1.2rem;
+    padding: 0.8rem 1rem;
+    background: var(--oro);
+    color: var(--notte);
+    border-radius: 10px;
+    font-weight: bold;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.banner-feedback .btn-nuovo {
+    margin-top: 0;
+    background: var(--notte);
+    color: var(--oro);
+}

@@ -1,0 +1,97 @@
+{% from "_macro.html" import avatar %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Com'è andata? - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('dettaglio_tavolo', tavolo_id=tavolo.id) }}">← Torna al tavolo</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <h3 class="titolo-sezione">Com'è andata: {{ tavolo.tema }}?</h3>
+
+        <form method="POST" action="{{ url_for('feedback_tavolo', tavolo_id=tavolo.id) }}">
+
+            {% if altri %}
+            <div class="card-tavolo sezione-fb">
+                <h2>1. Chi era presente?</h2>
+                <p class="nota">Togli la spunta a chi non si è presentato. Per chi c'era, indica quanto vi siete trovati bene.</p>
+                {% for a in altri %}
+                <div class="persona-fb" data-id="{{ a.id }}">
+                    <label class="riga-presenza">
+                        <input type="checkbox" name="presente_{{ a.id }}" value="1" checked class="chk-presente">
+                        {{ avatar(a.foto_url, a.nome, 'avatar-sm') }}
+                        <strong>{{ a.nome }}</strong>
+                    </label>
+                    <div class="compat-box">
+                        {% for valore, etichetta in compat %}
+                        <label class="pill"><input type="radio" name="compat_{{ a.id }}" value="{{ valore }}"> {{ etichetta }}</label>
+                        {% endfor %}
+                        <label class="pill pill-salta"><input type="radio" name="compat_{{ a.id }}" value="salta" checked> Salta</label>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="card-tavolo sezione-fb">
+                <h2>{{ '2' if altri else '1' }}. Il locale: {{ tavolo.locale_nome }}</h2>
+                {% for chiave, etichetta in criteri %}
+                <div class="riga-crit">
+                    <span>{{ etichetta }}</span>
+                    <span class="scelte">
+                        <label class="pill"><input type="radio" name="crit_{{ chiave }}" value="1"> 👍</label>
+                        <label class="pill"><input type="radio" name="crit_{{ chiave }}" value="0"> 👎</label>
+                        <label class="pill pill-salta"><input type="radio" name="crit_{{ chiave }}" value="salta" checked> Salta</label>
+                    </span>
+                </div>
+                {% endfor %}
+                <div class="riga-crit riga-obbl">
+                    <span><strong>Nel complesso lo consiglieresti?</strong></span>
+                    <span class="scelte">
+                        <label class="pill"><input type="radio" name="complessivo" value="1" required> 👍</label>
+                        <label class="pill"><input type="radio" name="complessivo" value="0" required> 👎</label>
+                    </span>
+                </div>
+            </div>
+
+            <div class="card-tavolo sezione-fb">
+                <h2>{{ '3' if altri else '2' }}. Quanto hai speso a testa?</h2>
+                <div class="scelte">
+                    {% for valore, etichetta in prezzi %}
+                    <label class="pill"><input type="radio" name="prezzo" value="{{ valore }}" required> {{ etichetta }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <button type="submit" class="btn-nuovo">Invia valutazione</button>
+        </form>
+    </main>
+
+<script>
+(function () {
+    document.querySelectorAll(".persona-fb").forEach(function (blocco) {
+        var chk = blocco.querySelector(".chk-presente");
+        var box = blocco.querySelector(".compat-box");
+        function aggiorna() { box.style.display = chk.checked ? "" : "none"; }
+        chk.addEventListener("change", aggiorna);
+        aggiorna();
+    });
+})();
+</script>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>
