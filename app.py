@@ -1,8 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from PIL import Image, ImageOps, UnidentifiedImageError
 import sqlite3
 import os
+import io
+import uuid
 from datetime import datetime, date
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -15,9 +18,66 @@ if USA_PG:
 else:
     IntegrityError = sqlite3.IntegrityError
 
+R2_ENDPOINT = os.environ.get("R2_ENDPOINT")
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
+R2_BUCKET = os.environ.get("R2_BUCKET")
+R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL")
+R2_OK = all([R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_URL])
+_s3 = None
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "chiave-di-sviluppo")
+app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "symposium.db")
+
+
+def get_s3():
+    global _s3
+    if _s3 is None:
+        import boto3
+        _s3 = boto3.client(
+            "s3",
+            endpoint_url=R2_ENDPOINT,
+            aws_access_key_id=R2_ACCESS_KEY_ID,
+            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+            region_name="auto",
+        )
+    return _s3
+
+
+def salva_foto(file, cartella):
+    if not file or not file.filename:
+        return None
+    if not R2_OK:
+        flash("Il caricamento delle foto non è configurato.")
+        return None
+    try:
+        img = Image.open(file.stream)
+        img = ImageOps.exif_transpose(img).convert("RGB")
+        img.thumbnail((1200, 1200))
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=85)
+        buf.seek(0)
+    except (UnidentifiedImageError, OSError):
+        flash("Il file scelto non è un'immagine valida.")
+        return None
+    chiave = f"{cartella}/{uuid.uuid4().hex}.jpg"
+    try:
+        get_s3().upload_fileobj(
+            buf, R2_BUCKET, chiave,
+            ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "public, max-age=31536000"},
+        )
+    except Exception:
+        flash("Errore nel caricamento della foto, riprova.")
+        return None
+    return f"{R2_PUBLIC_URL.rstrip('/')}/{chiave}"
+
+
+@app.errorhandler(413)
+def file_troppo_grande(e):
+    flash("La foto è troppo pesante (massimo 12 MB).")
+    return redirect(request.referrer or url_for("home"))
 
 
 def get_db():
@@ -72,6 +132,7 @@ def init_db():
     aggiungi_colonna(conn, "utenti", "professione", "TEXT")
     aggiungi_colonna(conn, "utenti", "formazione", "TEXT")
     aggiungi_colonna(conn, "utenti", "bio", "TEXT")
+    aggiungi_colonna(conn, "utenti", "foto_url", "TEXT")
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS locali (
@@ -100,6 +161,7 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "min_partecipanti", "INTEGER")
     aggiungi_colonna(conn, "tavoli", "eta_min", "INTEGER")
     aggiungi_colonna(conn, "tavoli", "eta_max", "INTEGER")
+    aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS iscrizioni (
@@ -174,10 +236,11 @@ def home():
 
     conn = get_db()
     tavoli = esegui(conn, """
-        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.citta,
-               t.min_partecipanti, t.eta_min, t.eta_max,
+        SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.citta, t.foto_url,
+               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome,
+               u.foto_url AS organizzatore_foto,
                (SELECT COUNT(*) FROM iscrizioni i WHERE i.tavolo_id = t.id) AS iscritti,
                (SELECT COUNT(*) FROM iscrizioni i WHERE i.tavolo_id = t.id AND i.utente_id = ?) AS gia_iscritto
         FROM tavoli t
@@ -212,7 +275,7 @@ def miei_tavoli():
     utente_id = session["utente_id"]
     conn = get_db()
     tavoli = esegui(conn, """
-        SELECT t.id, t.tema, t.data_ora, t.posti_totali, t.citta, t.organizzatore_id,
+        SELECT t.id, t.tema, t.data_ora, t.posti_totali, t.citta, t.organizzatore_id, t.foto_url,
                l.nome AS locale_nome,
                (SELECT COUNT(*) FROM iscrizioni x WHERE x.tavolo_id = t.id) AS iscritti
         FROM tavoli t
@@ -232,9 +295,10 @@ def dettaglio_tavolo(tavolo_id):
     conn = get_db()
     tavolo = esegui(conn, """
         SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.organizzatore_id,
-               t.citta, t.descrizione, t.min_partecipanti, t.eta_min, t.eta_max,
+               t.citta, t.descrizione, t.min_partecipanti, t.eta_min, t.eta_max, t.foto_url,
                l.nome AS locale_nome,
-               u.nome AS organizzatore_nome
+               u.nome AS organizzatore_nome,
+               u.foto_url AS organizzatore_foto
         FROM tavoli t
         LEFT JOIN locali l ON t.locale_id = l.id
         LEFT JOIN utenti u ON t.organizzatore_id = u.id
@@ -246,7 +310,7 @@ def dettaglio_tavolo(tavolo_id):
         abort(404)
 
     righe = esegui(conn, """
-        SELECT u.id, u.nome, u.interessi, u.data_nascita, u.citta
+        SELECT u.id, u.nome, u.interessi, u.data_nascita, u.citta, u.foto_url
         FROM iscrizioni i
         JOIN utenti u ON i.utente_id = u.id
         WHERE i.tavolo_id = ?
@@ -317,6 +381,7 @@ def registrati():
             session["utente_id"] = nuovo_id
             session["utente_nome"] = nome
             conn.close()
+            flash("Benvenuto! Aggiungi una foto dal tuo profilo.")
             return redirect(url_for("home"))
         except IntegrityError:
             conn.rollback()
@@ -408,6 +473,11 @@ def modifica_profilo():
         """, (nome, data_nascita, request.form.get("citta", "").strip(),
               request.form.get("professione", "").strip(), request.form.get("formazione", "").strip(),
               request.form.get("bio", "").strip(), request.form.get("interessi", "").strip(), uid))
+
+        nuova_foto = salva_foto(request.files.get("foto"), "profili")
+        if nuova_foto:
+            esegui(conn, "UPDATE utenti SET foto_url = ? WHERE id = ?", (nuova_foto, uid))
+
         conn.commit()
         conn.close()
         session["utente_nome"] = nome
@@ -441,6 +511,8 @@ def nuovo_tavolo():
             flash("La fascia d'età non è valida.")
             return render_template("nuovo_tavolo.html")
 
+        foto_url = salva_foto(request.files.get("foto"), "tavoli")
+
         conn = get_db()
         row = esegui(conn, "SELECT id FROM locali WHERE nome = ?", (locale_nome,)).fetchone()
         if row:
@@ -451,10 +523,10 @@ def nuovo_tavolo():
         utente_id = session["utente_id"]
         tavolo_id = inserisci(conn, """
             INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali,
-                                creato_il, citta, descrizione, min_partecipanti, eta_min, eta_max)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                creato_il, citta, descrizione, min_partecipanti, eta_min, eta_max, foto_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (tema, locale_id, utente_id, data_ora, obiettivo, posti,
-              datetime.now().isoformat(), citta, descrizione, minimo, eta_min, eta_max))
+              datetime.now().isoformat(), citta, descrizione, minimo, eta_min, eta_max, foto_url))
         esegui(conn,
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))

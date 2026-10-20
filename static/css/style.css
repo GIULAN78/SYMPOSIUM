@@ -368,3 +368,69 @@ main {
     color: var(--notte);
     font-weight: bold;
 }
+
+.avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--oro);
+    flex-shrink: 0;
+}
+
+.avatar-vuoto {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--notte);
+    color: var(--oro);
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.avatar-sm {
+    width: 28px;
+    height: 28px;
+    font-size: 0.8rem;
+}
+
+.avatar-lg {
+    width: 96px;
+    height: 96px;
+    font-size: 2.2rem;
+}
+
+.riga-foto {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.6rem;
+}
+
+.riga-org {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.riga-partecipante {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.card-con-foto {
+    padding: 0;
+    overflow: hidden;
+}
+
+.corpo-card {
+    padding: 1.2rem 1.5rem;
+}
+
+.copertina {
+    display: block;
+    width: 100%;
+    max-height: 260px;
+    object-fit: cover;
+}

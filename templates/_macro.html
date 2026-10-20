@@ -1,0 +1,7 @@
+{% macro avatar(foto, nome, classe='') %}
+{% if foto %}
+<img class="avatar {{ classe }}" src="{{ foto }}" alt="{{ nome }}" loading="lazy">
+{% else %}
+<span class="avatar avatar-vuoto {{ classe }}">{{ (nome or '?')[:1]|upper }}</span>
+{% endif %}
+{% endmacro %}

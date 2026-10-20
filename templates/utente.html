@@ -1,3 +1,4 @@
+{% from "_macro.html" import avatar %}
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -20,8 +21,13 @@
         {% endwith %}
 
         <div class="card-tavolo">
-            <h2>{{ u.nome }}</h2>
-            <p>{% if u.data_nascita|eta %}{{ u.data_nascita|eta }} anni{% endif %}{% if u.citta %}, {{ u.citta }}{% endif %}</p>
+            <div class="riga-foto">
+                {{ avatar(u.foto_url, u.nome, 'avatar-lg') }}
+                <div>
+                    <h2>{{ u.nome }}</h2>
+                    <p>{% if u.data_nascita|eta %}{{ u.data_nascita|eta }} anni{% endif %}{% if u.citta %}, {{ u.citta }}{% endif %}</p>
+                </div>
+            </div>
 
             <div class="statistiche">
                 <div><strong>{{ organizzati }}</strong><span>organizzatore</span></div>

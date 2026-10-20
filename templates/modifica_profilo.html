@@ -1,3 +1,4 @@
+{% from "_macro.html" import avatar %}
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -18,7 +19,15 @@
         {% with messaggi = get_flashed_messages() %}
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
-        <form class="form-tavolo" method="POST" action="{{ url_for('modifica_profilo') }}">
+        <form class="form-tavolo" method="POST" action="{{ url_for('modifica_profilo') }}" enctype="multipart/form-data">
+            <div class="riga-foto">
+                {{ avatar(u.foto_url, u.nome, 'avatar-lg') }}
+                <div>
+                    <label for="foto">Foto profilo</label>
+                    <input type="file" id="foto" name="foto" accept="image/*">
+                </div>
+            </div>
+
             <label for="nome">Nome</label>
             <input type="text" id="nome" name="nome" value="{{ u.nome }}" required>
 

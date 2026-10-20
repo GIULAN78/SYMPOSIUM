@@ -19,9 +19,12 @@
         {% with messaggi = get_flashed_messages() %}
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
-        <form class="form-tavolo" method="POST" action="{{ url_for('nuovo_tavolo') }}">
+        <form class="form-tavolo" method="POST" action="{{ url_for('nuovo_tavolo') }}" enctype="multipart/form-data">
             <label for="tema">Tema del tavolo</label>
             <input type="text" id="tema" name="tema" placeholder="Es. Cena tra appassionati di storia" required>
+
+            <label for="foto">Foto del locale o del piatto (opzionale)</label>
+            <input type="file" id="foto" name="foto" accept="image/*">
 
             <label for="descrizione">Descrizione (opzionale)</label>
             <textarea id="descrizione" name="descrizione" rows="4" placeholder="Di cosa si parlerà, che tipo di serata, chi cerchi al tavolo..."></textarea>

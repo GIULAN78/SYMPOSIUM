@@ -1,3 +1,4 @@
+{% from "_macro.html" import avatar %}
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -43,29 +44,37 @@
 
         <div class="lista-tavoli">
             {% for t in tavoli %}
-            <div class="card-tavolo">
-                <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}</h2>
-                <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}</p>
-                <p class="data">🗓️ {{ t.data_ora|data_it }}</p>
-                {% if t.eta_min is not none and t.eta_max is not none %}
-                <p>👥 Età {{ t.eta_min }}-{{ t.eta_max }}</p>
+            <div class="card-tavolo card-con-foto">
+                {% if t.foto_url %}
+                <a href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}"><img class="copertina" src="{{ t.foto_url }}" alt="{{ t.tema }}" loading="lazy"></a>
                 {% endif %}
-                {% if t.obiettivo %}
-                <p class="obiettivo">🎯 {{ t.obiettivo }}</p>
-                {% endif %}
-                <p class="organizzatore">Organizzato da: {{ t.organizzatore_nome or "Anonimo" }}</p>
-                <p class="posti">{{ t.iscritti }} / {{ t.posti_totali }} posti occupati{% if t.min_partecipanti %} · minimo {{ t.min_partecipanti }}{% endif %}</p>
+                <div class="corpo-card">
+                    <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}</h2>
+                    <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}</p>
+                    <p class="data">🗓️ {{ t.data_ora|data_it }}</p>
+                    {% if t.eta_min is not none and t.eta_max is not none %}
+                    <p>👥 Età {{ t.eta_min }}-{{ t.eta_max }}</p>
+                    {% endif %}
+                    {% if t.obiettivo %}
+                    <p class="obiettivo">🎯 {{ t.obiettivo }}</p>
+                    {% endif %}
+                    <p class="riga-org">
+                        {{ avatar(t.organizzatore_foto, t.organizzatore_nome, 'avatar-sm') }}
+                        <span>Organizzato da {{ t.organizzatore_nome or "Anonimo" }}</span>
+                    </p>
+                    <p class="posti">{{ t.iscritti }} / {{ t.posti_totali }} posti occupati{% if t.min_partecipanti %} · minimo {{ t.min_partecipanti }}{% endif %}</p>
 
-                {% if t.gia_iscritto %}
-                    <button class="btn-iscriviti" disabled>Sei iscritto ✓</button>
-                {% else %}
-                <form action="{{ url_for('iscriviti', tavolo_id=t.id) }}" method="POST">
-                    <button type="submit" class="btn-iscriviti" {% if t.iscritti >= t.posti_totali %}disabled{% endif %}>
-                        {% if t.iscritti >= t.posti_totali %}Completo{% else %}Partecipa{% endif %}
-                    </button>
-                </form>
-                {% endif %}
-                <a class="link-dettaglio" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">Vedi dettagli →</a>
+                    {% if t.gia_iscritto %}
+                        <button class="btn-iscriviti" disabled>Sei iscritto ✓</button>
+                    {% else %}
+                    <form action="{{ url_for('iscriviti', tavolo_id=t.id) }}" method="POST">
+                        <button type="submit" class="btn-iscriviti" {% if t.iscritti >= t.posti_totali %}disabled{% endif %}>
+                            {% if t.iscritti >= t.posti_totali %}Completo{% else %}Partecipa{% endif %}
+                        </button>
+                    </form>
+                    {% endif %}
+                    <a class="link-dettaglio" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">Vedi dettagli →</a>
+                </div>
             </div>
             {% endfor %}
         </div>
