@@ -555,3 +555,42 @@ main {
     background: var(--bordeaux);
     color: #fff;
 }
+
+.gruppo-fasce {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.titolo-fasce {
+    color: var(--oro);
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-right: 0.3rem;
+}
+
+.pill-fascia {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--oro);
+    border-radius: 16px;
+    background: var(--avorio);
+    color: var(--notte);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.pill-fascia small {
+    opacity: 0.65;
+    font-size: 0.7rem;
+}
+
+.pill-fascia:has(input:checked) {
+    background: var(--oro);
+    font-weight: bold;
+}

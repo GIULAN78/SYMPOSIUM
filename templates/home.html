@@ -30,16 +30,27 @@
         <form class="form-ricerca" method="GET" action="{{ url_for('home') }}">
             <input type="text" name="q" value="{{ q }}" placeholder="Cerca per tema, locale, obiettivo...">
             <input type="text" name="citta" value="{{ citta }}" placeholder="Città">
+
+            <div class="gruppo-fasce">
+                <span class="titolo-fasce">Quando</span>
+                {% for chiave, etichetta, orario in fasce %}
+                <label class="pill-fascia">
+                    <input type="checkbox" name="fascia" value="{{ chiave }}" {% if chiave in fasce_sel %}checked{% endif %}>
+                    {{ etichetta }} <small>{{ orario }}</small>
+                </label>
+                {% endfor %}
+            </div>
+
             {% if utente_nome %}
             <label class="filtro"><input type="checkbox" name="eta" value="1" {% if solo_eta %}checked{% endif %}> Della mia età</label>
             {% endif %}
             <label class="filtro"><input type="checkbox" name="confermati" value="1" {% if solo_confermati %}checked{% endif %}> Confermati</label>
             <button type="submit" class="btn-iscriviti">Cerca</button>
-            {% if q or citta or solo_eta or solo_confermati %}<a class="link-dettaglio" href="{{ url_for('home') }}">Azzera</a>{% endif %}
+            {% if q or citta or solo_eta or solo_confermati or fasce_sel %}<a class="link-dettaglio" href="{{ url_for('home') }}">Azzera</a>{% endif %}
         </form>
 
         {% if tavoli|length == 0 %}
-            <p class="vuoto">{% if q or citta or solo_eta or solo_confermati %}Nessun tavolo corrisponde alla ricerca.{% else %}Nessun tavolo disponibile al momento. Creane uno tu!{% endif %}</p>
+            <p class="vuoto">{% if q or citta or solo_eta or solo_confermati or fasce_sel %}Nessun tavolo corrisponde alla ricerca.{% else %}Nessun tavolo disponibile al momento. Creane uno tu!{% endif %}</p>
         {% endif %}
 
         <div class="lista-tavoli">

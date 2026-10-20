@@ -289,12 +289,40 @@ def utente_per_id(conn, utente_id):
     return esegui(conn, "SELECT * FROM utenti WHERE id = ?", (utente_id,)).fetchone()
 
 
+FASCE = [
+    ("mattina", "Mattina", "5:00-12:00"),
+    ("pranzo", "Pranzo", "12:00-15:30"),
+    ("pomeriggio", "Pomeriggio", "15:30-18:30"),
+    ("sera", "Sera", "18:30-22:30"),
+    ("seconda_serata", "Seconda serata", "22:30-5:00"),
+]
+
+
+def fascia_di(data_ora):
+    try:
+        d = datetime.fromisoformat(data_ora)
+    except (ValueError, TypeError):
+        return None
+    m = d.hour * 60 + d.minute
+    if 5 * 60 <= m < 12 * 60:
+        return "mattina"
+    if 12 * 60 <= m < 15 * 60 + 30:
+        return "pranzo"
+    if 15 * 60 + 30 <= m < 18 * 60 + 30:
+        return "pomeriggio"
+    if 18 * 60 + 30 <= m < 22 * 60 + 30:
+        return "sera"
+    return "seconda_serata"
+
+
 @app.route("/")
 def home():
     q = request.args.get("q", "").strip()
     citta = request.args.get("citta", "").strip()
     solo_eta = request.args.get("eta") == "1"
     solo_confermati = request.args.get("confermati") == "1"
+    fasce_valide = {f[0] for f in FASCE}
+    fasce_sel = [f for f in request.args.getlist("fascia") if f in fasce_valide]
 
     conn = get_db()
     tavoli = esegui(conn, """
@@ -328,9 +356,12 @@ def home():
                   and (t["eta_max"] is None or mia_eta <= t["eta_max"])]
     if solo_confermati:
         tavoli = [t for t in tavoli if t["min_partecipanti"] and t["iscritti"] >= t["min_partecipanti"]]
+    if fasce_sel:
+        tavoli = [t for t in tavoli if fascia_di(t["data_ora"]) in fasce_sel]
 
     return render_template("home.html", tavoli=tavoli, q=q, citta=citta,
-                           solo_eta=solo_eta, solo_confermati=solo_confermati)
+                           solo_eta=solo_eta, solo_confermati=solo_confermati,
+                           fasce=FASCE, fasce_sel=fasce_sel)
 
 
 @app.route("/miei-tavoli")
