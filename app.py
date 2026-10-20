@@ -2,11 +2,12 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from PIL import Image, ImageOps, UnidentifiedImageError
+from zoneinfo import ZoneInfo
 import sqlite3
 import os
 import io
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 USA_PG = bool(DATABASE_URL)
@@ -183,11 +184,54 @@ def init_db():
         )
     """)
 
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS valutazioni_locale (
+            id {pk},
+            tavolo_id INTEGER REFERENCES tavoli (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            locale_id INTEGER REFERENCES locali (id),
+            voto INTEGER NOT NULL,
+            creato_il TEXT,
+            UNIQUE (tavolo_id, utente_id)
+        )
+    """)
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS assenze (
+            id {pk},
+            tavolo_id INTEGER REFERENCES tavoli (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            creato_il TEXT,
+            UNIQUE (tavolo_id, utente_id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
 
 init_db()
+
+
+def adesso_it():
+    return datetime.now(ZoneInfo("Europe/Rome")).replace(tzinfo=None)
+
+
+def e_concluso(data_ora):
+    try:
+        return datetime.fromisoformat(data_ora) + timedelta(hours=2) < adesso_it()
+    except (ValueError, TypeError):
+        return False
+
+
+def affidabilita(assenze, partecipato):
+    if not partecipato:
+        return None
+    if assenze == 0:
+        return "Alta affidabilità"
+    if assenze / partecipato <= 0.2:
+        return "Affidabilità media"
+    return "Affidabilità bassa"
 
 
 def eta_da(data_nascita):
@@ -226,6 +270,14 @@ def eta_filtro(valore):
     return eta_da(valore)
 
 
+@app.template_filter("percento")
+def percento(positivi, totale):
+    try:
+        return int(round(positivi * 100 / totale))
+    except (TypeError, ZeroDivisionError):
+        return 0
+
+
 @app.context_processor
 def utente_corrente():
     return {"utente_nome": session.get("utente_nome"), "utente_id": session.get("utente_id")}
@@ -252,7 +304,9 @@ def home():
                u.nome AS organizzatore_nome,
                u.foto_url AS organizzatore_foto,
                (SELECT COUNT(*) FROM iscrizioni i WHERE i.tavolo_id = t.id) AS iscritti,
-               (SELECT COUNT(*) FROM iscrizioni i WHERE i.tavolo_id = t.id AND i.utente_id = ?) AS gia_iscritto
+               (SELECT COUNT(*) FROM iscrizioni i WHERE i.tavolo_id = t.id AND i.utente_id = ?) AS gia_iscritto,
+               (SELECT COUNT(*) FROM valutazioni_locale v WHERE v.locale_id = t.locale_id) AS voti_locale,
+               (SELECT COALESCE(SUM(v.voto), 0) FROM valutazioni_locale v WHERE v.locale_id = t.locale_id) AS voti_pos
         FROM tavoli t
         LEFT JOIN locali l ON t.locale_id = l.id
         LEFT JOIN utenti u ON t.organizzatore_id = u.id
@@ -306,9 +360,12 @@ def dettaglio_tavolo(tavolo_id):
     tavolo = esegui(conn, """
         SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.organizzatore_id,
                t.citta, t.descrizione, t.min_partecipanti, t.eta_min, t.eta_max, t.foto_url,
+               t.locale_id,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome,
-               u.foto_url AS organizzatore_foto
+               u.foto_url AS organizzatore_foto,
+               (SELECT COUNT(*) FROM valutazioni_locale v WHERE v.locale_id = t.locale_id) AS voti_locale,
+               (SELECT COALESCE(SUM(v.voto), 0) FROM valutazioni_locale v WHERE v.locale_id = t.locale_id) AS voti_pos
         FROM tavoli t
         LEFT JOIN locali l ON t.locale_id = l.id
         LEFT JOIN utenti u ON t.organizzatore_id = u.id
@@ -327,7 +384,15 @@ def dettaglio_tavolo(tavolo_id):
         ORDER BY i.id ASC
     """, (tavolo_id,)).fetchall()
 
-    io = utente_per_id(conn, session.get("utente_id"))
+    assenti = {r["utente_id"] for r in esegui(conn, "SELECT utente_id FROM assenze WHERE tavolo_id = ?", (tavolo_id,)).fetchall()}
+
+    uid = session.get("utente_id")
+    mio_voto = None
+    if uid:
+        r = esegui(conn, "SELECT voto FROM valutazioni_locale WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid)).fetchone()
+        mio_voto = r["voto"] if r else None
+
+    io = utente_per_id(conn, uid)
     conn.close()
 
     miei = set_interessi(io["interessi"]) if io else set()
@@ -336,17 +401,20 @@ def dettaglio_tavolo(tavolo_id):
         p = dict(r)
         p["in_comune"] = len(miei & set_interessi(p["interessi"]))
         p["eta"] = eta_da(p["data_nascita"])
+        p["assente"] = p["id"] in assenti
         partecipanti.append(p)
 
     eta_list = [p["eta"] for p in partecipanti if p["eta"] is not None]
     range_eta = (min(eta_list), max(eta_list)) if eta_list else None
     eta_media = round(sum(eta_list) / len(eta_list)) if eta_list else None
 
-    uid = session.get("utente_id")
     gia_iscritto = any(p["id"] == uid for p in partecipanti)
     sono_organizzatore = uid == tavolo["organizzatore_id"]
     completo = len(partecipanti) >= tavolo["posti_totali"]
     confermato = bool(tavolo["min_partecipanti"] and len(partecipanti) >= tavolo["min_partecipanti"])
+    concluso = e_concluso(tavolo["data_ora"])
+    sono_assente = uid in assenti
+    puo_valutare = bool(concluso and gia_iscritto and not sono_assente and mio_voto is None)
 
     return render_template(
         "tavolo.html",
@@ -358,7 +426,79 @@ def dettaglio_tavolo(tavolo_id):
         confermato=confermato,
         range_eta=range_eta,
         eta_media=eta_media,
+        concluso=concluso,
+        puo_valutare=puo_valutare,
+        mio_voto=mio_voto,
     )
+
+
+@app.route("/tavolo/<int:tavolo_id>/valuta-locale", methods=["POST"])
+@login_richiesto
+def valuta_locale(tavolo_id):
+    voto = 1 if request.form.get("voto") == "1" else 0
+    uid = session["utente_id"]
+    conn = get_db()
+    tavolo = esegui(conn, "SELECT data_ora, locale_id FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    if not tavolo:
+        conn.close()
+        abort(404)
+
+    if not e_concluso(tavolo["data_ora"]):
+        conn.close()
+        flash("Potrai valutare il locale dopo la serata.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    if not e_iscritto(conn, tavolo_id, uid):
+        conn.close()
+        abort(403)
+    assente = esegui(conn, "SELECT 1 AS ok FROM assenze WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid)).fetchone()
+    if assente:
+        conn.close()
+        flash("Non puoi valutare un locale se risulti assente.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+    try:
+        esegui(conn,
+               "INSERT INTO valutazioni_locale (tavolo_id, utente_id, locale_id, voto, creato_il) VALUES (?, ?, ?, ?, ?)",
+               (tavolo_id, uid, tavolo["locale_id"], voto, datetime.now().isoformat()))
+        conn.commit()
+        flash("Grazie per la valutazione!")
+    except IntegrityError:
+        conn.rollback()
+        flash("Hai già valutato questo locale.")
+    conn.close()
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
+@app.route("/tavolo/<int:tavolo_id>/assenza/<int:utente_target>", methods=["POST"])
+@login_richiesto
+def segna_assenza(tavolo_id, utente_target):
+    conn = get_db()
+    tavolo = esegui(conn, "SELECT organizzatore_id, data_ora FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    if not tavolo:
+        conn.close()
+        abort(404)
+    if tavolo["organizzatore_id"] != session["utente_id"]:
+        conn.close()
+        abort(403)
+    if not e_concluso(tavolo["data_ora"]):
+        conn.close()
+        flash("Le assenze si segnano dopo la serata.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    if utente_target == tavolo["organizzatore_id"] or not e_iscritto(conn, tavolo_id, utente_target):
+        conn.close()
+        abort(400)
+
+    esistente = esegui(conn, "SELECT id FROM assenze WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, utente_target)).fetchone()
+    if esistente:
+        esegui(conn, "DELETE FROM assenze WHERE id = ?", (esistente["id"],))
+        flash("Assenza rimossa.")
+    else:
+        esegui(conn, "INSERT INTO assenze (tavolo_id, utente_id, creato_il) VALUES (?, ?, ?)",
+               (tavolo_id, utente_target, datetime.now().isoformat()))
+        flash("Assenza segnata.")
+    conn.commit()
+    conn.close()
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
 def e_iscritto(conn, tavolo_id, utente_id):
@@ -536,6 +676,7 @@ def profilo_utente(utente_id):
         JOIN tavoli t ON t.id = i.tavolo_id
         WHERE i.utente_id = ? AND t.organizzatore_id != ?
     """, (utente_id, utente_id)).fetchone()["n"]
+    assenze = esegui(conn, "SELECT COUNT(*) AS n FROM assenze WHERE utente_id = ?", (utente_id,)).fetchone()["n"]
     io = utente_per_id(conn, session.get("utente_id"))
     conn.close()
 
@@ -551,6 +692,8 @@ def profilo_utente(utente_id):
         n_comune=sum(1 for i in interessi if i["comune"]),
         organizzati=organizzati,
         partecipato=partecipato,
+        assenze=assenze,
+        affidabilita=affidabilita(assenze, partecipato),
         mio=(session.get("utente_id") == utente_id),
     )
 
@@ -721,6 +864,8 @@ def elimina_tavolo(tavolo_id):
         abort(403)
 
     esegui(conn, "DELETE FROM messaggi WHERE tavolo_id = ?", (tavolo_id,))
+    esegui(conn, "DELETE FROM valutazioni_locale WHERE tavolo_id = ?", (tavolo_id,))
+    esegui(conn, "DELETE FROM assenze WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM tavoli WHERE id = ?", (tavolo_id,))
     conn.commit()

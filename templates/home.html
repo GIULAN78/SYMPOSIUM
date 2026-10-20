@@ -50,7 +50,9 @@
                 {% endif %}
                 <div class="corpo-card">
                     <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}</h2>
-                    <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}</p>
+                    <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}
+                        {% if t.voti_locale %}<span class="badge badge-grad">👍 {{ t.voti_pos|percento(t.voti_locale) }}%</span>{% endif %}
+                    </p>
                     <p class="data">🗓️ {{ t.data_ora|data_it }}</p>
                     {% if t.eta_min is not none and t.eta_max is not none %}
                     <p>👥 Età {{ t.eta_min }}-{{ t.eta_max }}</p>

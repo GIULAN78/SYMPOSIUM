@@ -26,12 +26,14 @@
             <img class="copertina" src="{{ tavolo.foto_url }}" alt="{{ tavolo.tema }}">
             {% endif %}
             <div class="corpo-card">
-                <h2>{{ tavolo.tema }}{% if confermato %} <span class="badge badge-conf">Confermato</span>{% endif %}</h2>
+                <h2>{{ tavolo.tema }}{% if confermato %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if concluso %} <span class="badge badge-fine">Concluso</span>{% endif %}</h2>
                 <p class="riga-org">
                     {{ avatar(tavolo.organizzatore_foto, tavolo.organizzatore_nome, 'avatar-sm') }}
                     <span>Creato da <a href="{{ url_for('profilo_utente', utente_id=tavolo.organizzatore_id) }}">{{ tavolo.organizzatore_nome or "Anonimo" }}</a></span>
                 </p>
-                <p class="locale">📍 {{ tavolo.locale_nome or "Locale da definire" }}{% if tavolo.citta %}, {{ tavolo.citta }}{% endif %}</p>
+                <p class="locale">📍 {{ tavolo.locale_nome or "Locale da definire" }}{% if tavolo.citta %}, {{ tavolo.citta }}{% endif %}
+                    {% if tavolo.voti_locale %}<span class="badge badge-grad">👍 {{ tavolo.voti_pos|percento(tavolo.voti_locale) }}% ({{ tavolo.voti_locale }})</span>{% else %}<span class="nota">Nessuna valutazione</span>{% endif %}
+                </p>
                 <p class="data">🗓️ {{ tavolo.data_ora|data_it }}</p>
                 {% if tavolo.eta_min is not none and tavolo.eta_max is not none %}
                 <p>👥 Età ammessa: {{ tavolo.eta_min }}-{{ tavolo.eta_max }}</p>
@@ -47,6 +49,18 @@
                 {% endif %}
                 <p class="posti">{{ partecipanti|length }} / {{ tavolo.posti_totali }} posti occupati{% if eta_media %} · Range {{ range_eta[0] }}-{{ range_eta[1] }}, età media ~{{ eta_media }}{% endif %}</p>
 
+                {% if puo_valutare %}
+                <div class="valuta">
+                    <p><strong>Com'è andata al {{ tavolo.locale_nome }}?</strong></p>
+                    <form action="{{ url_for('valuta_locale', tavolo_id=tavolo.id) }}" method="POST" class="valuta-form">
+                        <button type="submit" name="voto" value="1" class="btn-iscriviti">👍 Bene</button>
+                        <button type="submit" name="voto" value="0" class="btn-annulla">👎 Male</button>
+                    </form>
+                </div>
+                {% elif mio_voto is not none %}
+                <p class="nota">Hai valutato il locale: {{ '👍' if mio_voto == 1 else '👎' }}</p>
+                {% endif %}
+
                 {% if not utente_nome %}
                     <p class="link-alt"><a href="{{ url_for('accedi') }}">Accedi</a> per iscriverti a questo tavolo.</p>
                 {% elif sono_organizzatore %}
@@ -58,10 +72,12 @@
                     </form>
                 {% elif gia_iscritto %}
                     <a class="btn-nuovo" href="{{ url_for('chat_tavolo', tavolo_id=tavolo.id) }}">💬 Chat del tavolo</a>
+                    {% if not concluso %}
                     <form action="{{ url_for('annulla_iscrizione', tavolo_id=tavolo.id) }}" method="POST">
                         <button type="submit" class="btn-annulla">Annulla iscrizione</button>
                     </form>
-                {% else %}
+                    {% endif %}
+                {% elif not concluso %}
                     <form action="{{ url_for('iscriviti', tavolo_id=tavolo.id) }}" method="POST">
                         <button type="submit" class="btn-iscriviti" {% if completo %}disabled{% endif %}>
                             {% if completo %}Completo{% else %}Partecipa{% endif %}
@@ -76,10 +92,15 @@
             {% for p in partecipanti %}
             <div class="partecipante riga-partecipante">
                 {{ avatar(p.foto_url, p.nome) }}
-                <div>
-                    <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=p.id) }}"><strong>{{ p.nome }}</strong></a>{% if p.id == tavolo.organizzatore_id %} <span class="badge">organizzatore</span>{% endif %}
+                <div class="info-part">
+                    <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=p.id) }}"><strong>{{ p.nome }}</strong></a>{% if p.id == tavolo.organizzatore_id %} <span class="badge">organizzatore</span>{% endif %}{% if p.assente %} <span class="badge badge-ass">assente</span>{% endif %}
                     <p class="interessi">{% if p.eta %}{{ p.eta }} anni{% endif %}{% if p.citta %}, {{ p.citta }}{% endif %}{% if utente_nome and p.id != utente_id %} · {{ p.in_comune }} interessi in comune{% endif %}</p>
                 </div>
+                {% if sono_organizzatore and concluso and p.id != tavolo.organizzatore_id %}
+                <form action="{{ url_for('segna_assenza', tavolo_id=tavolo.id, utente_target=p.id) }}" method="POST">
+                    <button type="submit" class="btn-piccolo">{{ 'Rimuovi assenza' if p.assente else 'Segna assente' }}</button>
+                </form>
+                {% endif %}
             </div>
             {% endfor %}
         </div>

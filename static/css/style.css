@@ -500,3 +500,58 @@ main {
 .chat-form .btn-iscriviti {
     margin-top: 0;
 }
+
+.badge-grad {
+    background: var(--oro);
+    color: var(--notte);
+    margin-left: 0.4rem;
+}
+
+.badge-fine {
+    background: #5a5f78;
+    color: #fff;
+    vertical-align: middle;
+}
+
+.badge-ass {
+    background: var(--bordeaux);
+    color: #fff;
+}
+
+.nota {
+    font-size: 0.8rem;
+    color: #5a5f78;
+    margin-left: 0.4rem;
+}
+
+.valuta {
+    margin: 0.8rem 0;
+    padding: 0.8rem 1rem;
+    background: #fffaf0;
+    border-left: 3px solid var(--oro);
+    border-radius: 6px;
+}
+
+.valuta-form {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.info-part {
+    flex: 1;
+}
+
+.btn-piccolo {
+    padding: 0.3rem 0.7rem;
+    background: transparent;
+    color: var(--bordeaux);
+    border: 1px solid var(--bordeaux);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.btn-piccolo:hover {
+    background: var(--bordeaux);
+    color: #fff;
+}

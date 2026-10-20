@@ -13,5 +13,6 @@ psycopg2-binary==2.9.13
 python-dateutil==2.9.0.post0
 s3transfer==0.19.3
 six==1.17.0
+tzdata==2026.5
 urllib3==2.8.0
 Werkzeug==3.1.8
