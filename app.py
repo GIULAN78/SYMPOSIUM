@@ -2002,10 +2002,17 @@ def admin_sso():
         abort(403)
     conn = get_db()
     u = esegui(conn, "SELECT id, nome FROM utenti WHERE LOWER(email) = ?", (admin_email(),)).fetchone()
-    conn.close()
     if not u:
-        flash("Nessun account Symposium con l'email dell'amministratore.")
-        return redirect(url_for("accedi"))
+        import secrets
+        nuovo_id = inserisci(
+            conn,
+            "INSERT INTO utenti (nome, email, password_hash, interessi, creato_il) VALUES (?, ?, ?, ?, ?)",
+            ("Amministratore Symposium", admin_email(), generate_password_hash(secrets.token_hex(32)),
+             "", datetime.now().isoformat())
+        )
+        conn.commit()
+        u = {"id": nuovo_id, "nome": "Amministratore Symposium"}
+    conn.close()
     session["utente_id"] = u["id"]
     session["utente_nome"] = u["nome"]
     return redirect(url_for("admin"))
