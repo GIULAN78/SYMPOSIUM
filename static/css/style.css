@@ -1083,3 +1083,7 @@ header::after {
     font-weight: bold;
     margin: 0.2rem 0 0.8rem;
 }
+
+.pulsante-wallet {
+    margin-left: 0.5rem;
+}
