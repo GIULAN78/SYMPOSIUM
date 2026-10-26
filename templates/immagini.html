@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immagini del sito - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0D5EAF">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('admin') }}">← Pannello Admin</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <h3 class="titolo-sezione">🖼️ Immagini del sito</h3>
+
+        {% for chiave, etichetta in slot %}
+        <div class="card-tavolo">
+            <div class="corpo-card">
+                <h2>{{ etichetta }}</h2>
+                {% if valori[chiave] %}
+                <img class="anteprima-img" src="{{ valori[chiave] }}" alt="">
+                {% else %}
+                <p class="nota">Nessuna immagine caricata.</p>
+                {% endif %}
+                <form method="POST" enctype="multipart/form-data" class="form-tavolo form-nobordo">
+                    <input type="hidden" name="slot" value="{{ chiave }}">
+                    <input type="file" name="foto" accept="image/*" required>
+                    <button type="submit" class="btn-nuovo">Carica</button>
+                </form>
+                {% if valori[chiave] %}
+                <form method="POST">
+                    <input type="hidden" name="slot" value="{{ chiave }}">
+                    <input type="hidden" name="azione" value="rimuovi">
+                    <button type="submit" class="btn-annulla">Rimuovi</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="card-tavolo">
+            <div class="corpo-card">
+                <p class="etichetta">Consigli</p>
+                <ul class="lista-stat">
+                    <li>Usa solo immagini che puoi pubblicare: di tua proprietà o libere da diritti (ad esempio dominio pubblico su Wikimedia Commons).</li>
+                    <li>Banner: formato largo, ad esempio 1200 x 400 pixel.</li>
+                    <li>Preferisci file JPG, oppure PNG con sfondo pieno: le trasparenze diventano nere.</li>
+                    <li>Lo sfondo della testata viene schiarito dal blu, così il titolo resta leggibile.</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

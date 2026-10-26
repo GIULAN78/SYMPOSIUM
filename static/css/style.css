@@ -974,3 +974,65 @@ main > .riga-org {
     color: var(--avorio);
     margin-bottom: 0.6rem;
 }
+
+/* Tema blu Grecia */
+:root {
+    --notte: #0a4a8a;
+    --notte-chiaro: #0D5EAF;
+    --oro: #ffe14d;
+    --oro-chiaro: #fff08a;
+    --avorio: #eef6ff;
+    --avorio-scuro: #c3d9f2;
+    --bordeaux: #c4264a;
+    --testo: #0a2f5c;
+}
+
+body {
+    background: #0D5EAF;
+}
+
+header {
+    background: #0a4a8a;
+    border-bottom: 3px solid var(--oro);
+}
+
+header::after {
+    content: "";
+    display: block;
+    height: 24px;
+    margin: 16px -1.5rem -2rem;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M0 22H24M4 22V2H20V16H10V8H14' fill='none' stroke='white' stroke-width='2' stroke-linecap='square'/%3E%3C/svg%3E") repeat-x center;
+}
+
+.form-tavolo input,
+.form-tavolo textarea,
+.tag,
+.pill,
+.bolla,
+.descrizione,
+.valuta,
+.lista-stat {
+    background: #ffffff;
+}
+
+.notifica.non-letta {
+    background: #fff9d6;
+}
+
+.banner-home {
+    display: block;
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    border: 2px solid var(--oro);
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+
+.anteprima-img {
+    display: block;
+    max-width: 100%;
+    max-height: 160px;
+    border-radius: 8px;
+    margin: 0.6rem 0;
+}

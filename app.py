@@ -1648,6 +1648,80 @@ def salva_profilo(altro_id):
     return redirect(url_for("profilo_utente", utente_id=altro_id))
 
 
+SLOT_IMMAGINI = (
+    ("img_banner_home", "Banner in cima alla home"),
+    ("img_header", "Sfondo della testata (tutte le pagine)"),
+)
+
+
+def leggi_impostazione(conn, chiave):
+    r = esegui(conn, "SELECT valore FROM impostazioni WHERE chiave = ?", (chiave,)).fetchone()
+    return r["valore"] if r else ""
+
+
+def scrivi_impostazione(conn, chiave, valore):
+    if esegui(conn, "SELECT chiave FROM impostazioni WHERE chiave = ?", (chiave,)).fetchone():
+        esegui(conn, "UPDATE impostazioni SET valore = ? WHERE chiave = ?", (valore, chiave))
+    else:
+        esegui(conn, "INSERT INTO impostazioni (chiave, valore) VALUES (?, ?)", (chiave, valore))
+
+
+@app.after_request
+def immagini_decorative(risposta):
+    try:
+        if (
+            risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint in (None, "static", "service_worker")
+        ):
+            return risposta
+        conn = get_db()
+        banner = leggi_impostazione(conn, "img_banner_home")
+        header = leggi_impostazione(conn, "img_header")
+        conn.close()
+        if not banner and not header:
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        if header and "</head>" in testo:
+            stile = ('<style>header{background-image:linear-gradient(rgba(10,74,138,.72),rgba(10,74,138,.72)),url("'
+                     + header + '");background-size:cover;background-position:center}</style>')
+            testo = testo.replace("</head>", stile + "</head>", 1)
+        if banner and request.endpoint == "home" and "<main>" in testo:
+            testo = testo.replace("<main>", '<main><img class="banner-home" src="' + banner + '" alt="">', 1)
+        risposta.set_data(testo)
+    except Exception:
+        pass
+    return risposta
+
+
+@app.route("/admin/immagini", methods=["GET", "POST"])
+@login_richiesto
+def immagini_sito():
+    conn = get_db()
+    if not e_admin(conn, session["utente_id"]):
+        conn.close()
+        abort(403)
+    if request.method == "POST":
+        slot = request.form.get("slot")
+        if slot not in dict(SLOT_IMMAGINI):
+            conn.close()
+            abort(400)
+        if request.form.get("azione") == "rimuovi":
+            scrivi_impostazione(conn, slot, "")
+            flash("Immagine rimossa.")
+        else:
+            url = salva_foto(request.files.get("foto"), "decorazioni")
+            if url:
+                scrivi_impostazione(conn, slot, url)
+                flash("Immagine aggiornata.")
+        conn.commit()
+        conn.close()
+        return redirect(url_for("immagini_sito"))
+    valori = {k: leggi_impostazione(conn, k) for k, _ in SLOT_IMMAGINI}
+    conn.close()
+    return render_template("immagini.html", slot=SLOT_IMMAGINI, valori=valori)
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
