@@ -273,6 +273,16 @@ def init_db():
     """)
 
     aggiungi_colonna(conn, "utenti", "notif_tavoli", "INTEGER DEFAULT 1")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS messaggi_privati (
+            id {pk},
+            da_utente INTEGER REFERENCES utenti (id),
+            a_utente INTEGER REFERENCES utenti (id),
+            testo TEXT NOT NULL,
+            creato_il TEXT,
+            letto INTEGER DEFAULT 0
+        )
+    """)
     aggiungi_colonna(conn, "tavoli", "su_richiesta", "INTEGER DEFAULT 0")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS richieste (
@@ -1257,6 +1267,7 @@ def elimina_account():
         "DELETE FROM segnalazioni WHERE da_utente = ? OR utente_id = ?",
         "DELETE FROM notifiche WHERE utente_id = ? OR da_utente = ?",
         "DELETE FROM richieste WHERE utente_id = ?",
+        "DELETE FROM messaggi_privati WHERE da_utente = ? OR a_utente = ?",
         "DELETE FROM iscrizioni WHERE utente_id = ?",
         "DELETE FROM utenti WHERE id = ?",
     ):
@@ -1401,6 +1412,163 @@ def ritira_richiesta(tavolo_id):
     conn.close()
     flash("Richiesta ritirata.")
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
+def puo_scrivere(conn, uid, altro):
+    if not altro or altro == uid:
+        return False
+    if altro in relazioni_bloccate(conn, uid):
+        return False
+    r = esegui(conn, "SELECT 1 AS ok FROM amici WHERE (utente_id = ? AND amico_id = ?) OR (utente_id = ? AND amico_id = ?)",
+               (uid, altro, altro, uid)).fetchone()
+    return r is not None
+
+
+@app.after_request
+def icona_messaggi(risposta):
+    try:
+        if (
+            "utente_id" not in session
+            or risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint in (None, "static", "service_worker")
+        ):
+            return risposta
+        conn = get_db()
+        n = esegui(conn, "SELECT COUNT(*) AS n FROM messaggi_privati WHERE a_utente = ? AND letto = 0",
+                   (session["utente_id"],)).fetchone()["n"]
+        conn.close()
+        badge = ""
+        if n:
+            badge = '<span class="campanella-n">' + (str(n) if n < 100 else "99+") + "</span>"
+        html = '<a class="campanella msg-icona" href="' + url_for("elenco_messaggi") + '" aria-label="Messaggi">💬' + badge + "</a>"
+        testo = risposta.get_data(as_text=True)
+        if "</body>" in testo:
+            risposta.set_data(testo.replace("</body>", html + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
+
+
+@app.route("/messaggi")
+@login_richiesto
+def elenco_messaggi():
+    uid = session["utente_id"]
+    conn = get_db()
+    ids = set()
+    for sql in (
+        "SELECT amico_id AS x FROM amici WHERE utente_id = ?",
+        "SELECT utente_id AS x FROM amici WHERE amico_id = ?",
+        "SELECT DISTINCT a_utente AS x FROM messaggi_privati WHERE da_utente = ?",
+        "SELECT DISTINCT da_utente AS x FROM messaggi_privati WHERE a_utente = ?",
+    ):
+        for r in esegui(conn, sql, (uid,)).fetchall():
+            ids.add(r["x"])
+    ids.discard(uid)
+    ids -= relazioni_bloccate(conn, uid)
+
+    conversazioni = []
+    for altro in ids:
+        u = utente_per_id(conn, altro)
+        if not u:
+            continue
+        ultimo = esegui(conn, """
+            SELECT id, testo, da_utente, creato_il FROM messaggi_privati
+            WHERE (da_utente = ? AND a_utente = ?) OR (da_utente = ? AND a_utente = ?)
+            ORDER BY id DESC LIMIT 1
+        """, (uid, altro, altro, uid)).fetchone()
+        non_letti = esegui(conn, "SELECT COUNT(*) AS n FROM messaggi_privati WHERE da_utente = ? AND a_utente = ? AND letto = 0",
+                           (altro, uid)).fetchone()["n"]
+        try:
+            ora = datetime.fromisoformat(ultimo["creato_il"]).strftime("%d/%m %H:%M") if ultimo else ""
+        except (ValueError, TypeError):
+            ora = ""
+        conversazioni.append({
+            "id": altro, "nome": u["nome"], "foto_url": u["foto_url"],
+            "ultimo": (("Tu: " if ultimo["da_utente"] == uid else "") + ultimo["testo"]) if ultimo else "Nessun messaggio ancora",
+            "ora": ora, "non_letti": int(non_letti), "ordine": ultimo["id"] if ultimo else 0,
+        })
+    conn.close()
+    conversazioni.sort(key=lambda c: c["ordine"], reverse=True)
+    return render_template("messaggi.html", conversazioni=conversazioni)
+
+
+@app.route("/messaggi/<int:altro_id>")
+@login_richiesto
+def chat_privata(altro_id):
+    uid = session["utente_id"]
+    conn = get_db()
+    altro = utente_per_id(conn, altro_id)
+    if not altro:
+        conn.close()
+        abort(404)
+    ha_storia = esegui(conn, """
+        SELECT 1 AS ok FROM messaggi_privati
+        WHERE (da_utente = ? AND a_utente = ?) OR (da_utente = ? AND a_utente = ?) LIMIT 1
+    """, (uid, altro_id, altro_id, uid)).fetchone()
+    bloccato = altro_id in relazioni_bloccate(conn, uid)
+    consentito = puo_scrivere(conn, uid, altro_id)
+    conn.close()
+    if altro_id == uid or bloccato or not (consentito or ha_storia):
+        flash("Puoi scrivere messaggi solo ai tuoi amici.")
+        return redirect(url_for("elenco_messaggi"))
+    return render_template("chat_privata.html", altro=altro, puo_inviare=consentito)
+
+
+@app.route("/messaggi/<int:altro_id>/lista")
+@login_richiesto
+def chat_privata_lista(altro_id):
+    uid = session["utente_id"]
+    try:
+        dopo = int(request.args.get("dopo", 0))
+    except ValueError:
+        dopo = 0
+    conn = get_db()
+    if altro_id in relazioni_bloccate(conn, uid):
+        conn.close()
+        abort(403)
+    if dopo <= 0:
+        righe = esegui(conn, """
+            SELECT id, testo, da_utente, creato_il FROM messaggi_privati
+            WHERE (da_utente = ? AND a_utente = ?) OR (da_utente = ? AND a_utente = ?)
+            ORDER BY id DESC LIMIT 100
+        """, (uid, altro_id, altro_id, uid)).fetchall()
+        righe = list(reversed(righe))
+    else:
+        righe = esegui(conn, """
+            SELECT id, testo, da_utente, creato_il FROM messaggi_privati
+            WHERE ((da_utente = ? AND a_utente = ?) OR (da_utente = ? AND a_utente = ?)) AND id > ?
+            ORDER BY id ASC LIMIT 200
+        """, (uid, altro_id, altro_id, uid, dopo)).fetchall()
+    esegui(conn, "UPDATE messaggi_privati SET letto = 1 WHERE da_utente = ? AND a_utente = ? AND letto = 0",
+           (altro_id, uid))
+    conn.commit()
+    conn.close()
+    risultato = []
+    for r in righe:
+        try:
+            ora = datetime.fromisoformat(r["creato_il"]).strftime("%d/%m %H:%M")
+        except (ValueError, TypeError):
+            ora = ""
+        risultato.append({"id": r["id"], "testo": r["testo"], "ora": ora, "mio": r["da_utente"] == uid})
+    return jsonify(risultato)
+
+
+@app.route("/messaggi/<int:altro_id>/invia", methods=["POST"])
+@login_richiesto
+def chat_privata_invia(altro_id):
+    uid = session["utente_id"]
+    testo = request.form.get("testo", "").strip()[:1000]
+    conn = get_db()
+    if not puo_scrivere(conn, uid, altro_id):
+        conn.close()
+        abort(403)
+    if testo:
+        esegui(conn, "INSERT INTO messaggi_privati (da_utente, a_utente, testo, creato_il, letto) VALUES (?, ?, ?, ?, 0)",
+               (uid, altro_id, testo, datetime.now().isoformat()))
+        conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/miei-tavoli")

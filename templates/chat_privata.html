@@ -1,0 +1,97 @@
+{% from "_macro.html" import avatar %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ altro.nome }} - Messaggi - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('elenco_messaggi') }}">← Tutti i messaggi</a>
+    </header>
+
+    <main>
+        <p class="riga-org">
+            {{ avatar(altro.foto_url, altro.nome, 'avatar-sm') }}
+            <a class="titolo-link-chiaro" href="{{ url_for('profilo_utente', utente_id=altro.id) }}"><strong>{{ altro.nome }}</strong></a>
+        </p>
+
+        <div id="chat-box" class="chat-box" data-lista="{{ url_for('chat_privata_lista', altro_id=altro.id) }}"></div>
+
+        {% if puo_inviare %}
+        <form id="chat-form" class="chat-form" method="POST" action="{{ url_for('chat_privata_invia', altro_id=altro.id) }}">
+            <input type="text" id="chat-testo" name="testo" maxlength="1000" placeholder="Scrivi un messaggio..." autocomplete="off" required>
+            <button type="submit" class="btn-iscriviti">Invia</button>
+        </form>
+        {% else %}
+        <p class="nota-mappa">Non siete più amici: puoi rileggere i messaggi ma non scriverne di nuovi.</p>
+        {% endif %}
+    </main>
+
+<script>
+(function () {
+    var box = document.getElementById("chat-box");
+    var form = document.getElementById("chat-form");
+    var campo = document.getElementById("chat-testo");
+    var urlLista = box.getAttribute("data-lista");
+    var ultimo = 0;
+    var primo = true;
+
+    function aggiungi(m) {
+        var riga = document.createElement("div");
+        riga.className = "msg" + (m.mio ? " msg-mio" : "");
+        var bolla = document.createElement("div");
+        bolla.className = "bolla";
+        var ora = document.createElement("div");
+        ora.className = "msg-autore";
+        ora.textContent = m.ora;
+        var testo = document.createElement("div");
+        testo.className = "msg-testo";
+        testo.textContent = m.testo;
+        bolla.appendChild(ora);
+        bolla.appendChild(testo);
+        riga.appendChild(bolla);
+        box.appendChild(riga);
+    }
+
+    function carica() {
+        return fetch(urlLista + "?dopo=" + ultimo, { credentials: "same-origin" })
+            .then(function (r) { return r.ok ? r.json() : []; })
+            .then(function (dati) {
+                if (!dati.length) { return; }
+                var inFondo = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+                dati.forEach(aggiungi);
+                ultimo = dati[dati.length - 1].id;
+                if (primo || inFondo) { box.scrollTop = box.scrollHeight; }
+                primo = false;
+            })
+            .catch(function () {});
+    }
+
+    if (form) {
+        form.addEventListener("submit", function (e) {
+            e.preventDefault();
+            var testo = campo.value.trim();
+            if (!testo) { return; }
+            campo.value = "";
+            var d = new FormData();
+            d.append("testo", testo);
+            fetch(form.action, { method: "POST", credentials: "same-origin", body: d })
+                .then(carica)
+                .catch(function () { campo.value = testo; });
+        });
+    }
+
+    carica();
+    setInterval(carica, 4000);
+})();
+</script>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

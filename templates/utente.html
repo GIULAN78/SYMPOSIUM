@@ -66,6 +66,7 @@
                     <button type="submit" class="btn-piccolo">{{ '✔️ Sblocca' if e_bloccato else '🚫 Blocca' }}</button>
                 </form>
             </div>
+            {% if e_amico %}<a class="btn-piccolo" href="{{ url_for('chat_privata', altro_id=u.id) }}">💬 Scrivi un messaggio</a>{% endif %}
             <details class="segnala">
                 <summary class="btn-piccolo">🚩 Segnala questo profilo</summary>
                 <form action="{{ url_for('segnala', altro_id=u.id) }}" method="POST">

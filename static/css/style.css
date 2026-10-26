@@ -960,3 +960,17 @@ details.segnala form {
 .azioni-ric .btn-iscriviti {
     margin-top: 0;
 }
+
+.msg-icona {
+    right: 64px;
+}
+
+.titolo-link-chiaro {
+    color: var(--oro-chiaro);
+    text-decoration: none;
+}
+
+main > .riga-org {
+    color: var(--avorio);
+    margin-bottom: 0.6rem;
+}

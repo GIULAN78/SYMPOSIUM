@@ -1,0 +1,46 @@
+{% from "_macro.html" import avatar %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messaggi - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <h3 class="titolo-sezione">💬 Messaggi</h3>
+
+        {% if not conversazioni %}
+            <p class="vuoto">Nessuna conversazione. Aggiungi un amico dal suo profilo per scrivergli.</p>
+        {% endif %}
+
+        <div class="lista-notifiche">
+            {% for c in conversazioni %}
+            <a class="notifica {% if c.non_letti %}non-letta{% endif %}" href="{{ url_for('chat_privata', altro_id=c.id) }}">
+                {{ avatar(c.foto_url, c.nome) }}
+                <div class="info-part">
+                    <strong>{{ c.nome }}</strong>
+                    {% if c.non_letti %}<span class="badge badge-ass">{{ c.non_letti }}</span>{% endif %}
+                    <p>{{ c.ultimo[:70] }}{% if c.ultimo|length > 70 %}…{% endif %}</p>
+                    <span class="nota">{{ c.ora }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>
