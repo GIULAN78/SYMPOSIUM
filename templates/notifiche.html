@@ -13,7 +13,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
 
     <main>
@@ -33,7 +33,7 @@
         <form class="pref-notifiche" action="{{ url_for('notifiche_preferenze') }}" method="POST">
             <label>
                 <input type="checkbox" name="notif_tavoli" value="1" {% if attive %}checked{% endif %}>
-                Avvisami quando viene creato un tavolo nella mia città
+                Avvisami quando viene creato un banchetto nella mia città
             </label>
             <button type="submit" class="btn-piccolo btn-chiaro">Salva</button>
         </form>

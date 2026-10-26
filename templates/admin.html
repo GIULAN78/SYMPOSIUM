@@ -12,7 +12,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
 
     <main>
@@ -25,14 +25,14 @@
                 <h2>⚙️ Pannello Admin</h2>
                 <p class="etichetta">Premium oggi</p>
                 {% if a_pagamento %}
-                <p><span class="badge badge-ass">A PAGAMENTO</span> Solo i Premium vedono e usano i tavoli esclusivi.</p>
+                <p><span class="badge badge-ass">A PAGAMENTO</span> Solo i Premium vedono e frequentano i banchetti degli dei.</p>
                 <form action="{{ url_for('admin_premium_toggle') }}" method="POST">
                     <button type="submit" class="btn-nuovo btn-grande">🔓 Torna gratuito per tutti</button>
                 </form>
                 {% else %}
                 <p><span class="badge badge-conf">GRATUITO</span> Tutti hanno il Premium.</p>
                 <form action="{{ url_for('admin_premium_toggle') }}" method="POST"
-                      onsubmit="return confirm('Passare il Premium a pagamento? Da subito solo gli utenti Premium vedranno i tavoli esclusivi.');">
+                      onsubmit="return confirm('Passare il Premium a pagamento? Da subito solo i Premium vedranno i banchetti degli dei.');">
                     <button type="submit" class="btn-nuovo btn-grande">💳 Passa a pagamento</button>
                 </form>
                 {% endif %}

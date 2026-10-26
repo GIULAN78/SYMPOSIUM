@@ -721,7 +721,7 @@ def riserva_esclusivi():
     except Exception:
         return None
     if not ok:
-        flash("Questo tavolo è riservato agli utenti Premium.")
+        flash("Questo banchetto degli dei è riservato agli utenti Premium.")
         return redirect(url_for("pagina_premium"))
     return None
 
@@ -1009,7 +1009,7 @@ def segui_locale(locale_id):
         flash("Non segui più questo locale.")
     else:
         esegui(conn, "INSERT INTO locali_seguiti (locale_id, utente_id) VALUES (?, ?)", (locale_id, uid))
-        flash("Ora segui questo locale: ti avviseremo quando qualcuno crea un tavolo lì.")
+        flash("Ora segui questo locale: ti avviseremo quando qualcuno crea un banchetto lì.")
     conn.commit()
     conn.close()
     return redirect(request.referrer or url_for("home"))
@@ -1334,7 +1334,7 @@ def promuovi_coda(conn, tavolo_id):
                (tavolo_id, r["utente_id"], datetime.now().isoformat()))
         esegui(conn, "DELETE FROM richieste WHERE id = ?", (r["id"],))
         notifica(conn, r["utente_id"], "coda", t["tema"],
-                 "Si è liberato un posto: ora partecipi al tavolo!", link)
+                 "Si è liberato un posto: ora partecipi al banchetto!", link)
 
 
 def dati_richieste(tavolo_id):
@@ -1392,7 +1392,7 @@ def gestisci_richiesta(tavolo_id, utente_target, azione):
         n = esegui(conn, "SELECT COUNT(*) AS n FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,)).fetchone()["n"]
         if n >= t["posti_totali"]:
             conn.close()
-            flash("Il tavolo è al completo: non puoi accettare altre richieste.")
+            flash("Il banchetto è al completo: non puoi accettare altre richieste.")
             return redirect(link)
         esegui(conn, "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_target, datetime.now().isoformat()))
@@ -1402,7 +1402,7 @@ def gestisci_richiesta(tavolo_id, utente_target, azione):
         if t["min_partecipanti"] and n + 1 == t["min_partecipanti"]:
             for x in esegui(conn, "SELECT utente_id FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,)).fetchall():
                 notifica(conn, x["utente_id"], "confermato", t["tema"],
-                         "Il tavolo è confermato: è stato raggiunto il numero minimo di partecipanti", link)
+                         "Il banchetto è confermato: è stato raggiunto il numero minimo di partecipanti", link)
         flash("Richiesta accettata.")
     else:
         esegui(conn, "DELETE FROM richieste WHERE id = ?", (r["id"],))
@@ -2037,7 +2037,7 @@ def chat_tavolo(tavolo_id):
         abort(404)
     if not e_iscritto(conn, tavolo_id, session["utente_id"]):
         conn.close()
-        flash("La chat è riservata ai partecipanti del tavolo.")
+        flash("La chat è riservata ai partecipanti del banchetto.")
         return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
     conn.close()
     return render_template("chat.html", tavolo=tavolo)
@@ -2288,7 +2288,7 @@ def nuovo_tavolo():
             """, (utente_id, citta)).fetchall()
             for d in destinatari:
                 notifica(conn, d["id"], "nuovo_tavolo", locale_nome,
-                         f"{session.get('utente_nome')} ha creato un tavolo che potrebbe interessarti",
+                         f"{session.get('utente_nome')} ha creato un banchetto che potrebbe interessarti",
                          url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
         avvisati = {d["id"] for d in destinatari} if citta else set()
         seguaci = esegui(conn, "SELECT utente_id FROM locali_seguiti WHERE locale_id = ? AND utente_id != ?",
@@ -2296,12 +2296,12 @@ def nuovo_tavolo():
         for f in seguaci:
             if f["utente_id"] not in avvisati:
                 notifica(conn, f["utente_id"], "locale_seguito", locale_nome,
-                         "È stato creato un tavolo in un locale che segui",
+                         "È stato creato un banchetto in un locale che segui",
                          url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
         for f in esegui(conn, "SELECT utente_id FROM amici WHERE amico_id = ?", (utente_id,)).fetchall():
             if f["utente_id"] not in avvisati:
                 notifica(conn, f["utente_id"], "amico_tavolo", locale_nome,
-                         f"Il tuo amico {session.get('utente_nome')} ha creato un tavolo",
+                         f"Il tuo amico {session.get('utente_nome')} ha creato un banchetto",
                          url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
         conn.commit()
         conn.close()
@@ -2329,7 +2329,7 @@ def iscriviti(tavolo_id):
     org = esegui(conn, "SELECT organizzatore_id FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
     if org and org["organizzatore_id"] in relazioni_bloccate(conn, session["utente_id"]):
         conn.close()
-        flash("Non puoi iscriverti a questo tavolo.")
+        flash("Non puoi iscriverti a questo banchetto.")
         return redirect(url_for("home"))
     ha_limiti = tavolo["eta_min"] is not None or tavolo["eta_max"] is not None
 
@@ -2343,7 +2343,7 @@ def iscriviti(tavolo_id):
         or (tavolo["eta_max"] is not None and mia_eta > tavolo["eta_max"])
     ):
         conn.close()
-        flash("Questo tavolo è riservato a un'altra fascia d'età.")
+        flash("Questo banchetto è riservato a un'altra fascia d'età.")
         return redirect(request.referrer or url_for("home"))
 
     extra = esegui(conn, "SELECT su_richiesta, organizzatore_id, tema FROM tavoli WHERE id = ?",
@@ -2356,7 +2356,7 @@ def iscriviti(tavolo_id):
                    (tavolo_id, uid_r)).fetchone()
     if gia_r:
         conn.close()
-        flash("Hai già una richiesta per questo tavolo.")
+        flash("Hai già una richiesta per questo banchetto.")
         return redirect(request.referrer or url_for("home"))
     pieno = tavolo["iscritti"] >= tavolo["posti_totali"]
     if pieno or extra["su_richiesta"]:
@@ -2370,7 +2370,7 @@ def iscriviti(tavolo_id):
                          url_for("dettaglio_tavolo", tavolo_id=tavolo_id), uid_r)
             conn.commit()
             flash("Richiesta inviata: l'organizzatore la valuterà." if stato_r == "attesa"
-                  else "Il tavolo è completo: sei in lista d'attesa.")
+                  else "Il banchetto è completo: sei in lista d'attesa.")
         except IntegrityError:
             conn.rollback()
         conn.close()
@@ -2385,7 +2385,7 @@ def iscriviti(tavolo_id):
             link_t = url_for("dettaglio_tavolo", tavolo_id=tavolo_id)
             if info and info["organizzatore_id"] != session["utente_id"]:
                 notifica(conn, info["organizzatore_id"], "iscrizione", info["tema"],
-                         f"{session.get('utente_nome')} si è iscritto al tuo tavolo",
+                         f"{session.get('utente_nome')} ha preso posto al tuo banchetto",
                          link_t, session["utente_id"])
             totale = esegui(conn, "SELECT COUNT(*) AS n FROM iscrizioni WHERE tavolo_id = ?",
                             (tavolo_id,)).fetchone()["n"]
@@ -2393,7 +2393,7 @@ def iscriviti(tavolo_id):
                 for r in esegui(conn, "SELECT utente_id FROM iscrizioni WHERE tavolo_id = ?",
                                 (tavolo_id,)).fetchall():
                     notifica(conn, r["utente_id"], "confermato", info["tema"],
-                             "Il tavolo è confermato: è stato raggiunto il numero minimo di partecipanti",
+                             "Il banchetto è confermato: è stato raggiunto il numero minimo di partecipanti",
                              link_t)
             conn.commit()
         except IntegrityError:
@@ -2413,7 +2413,7 @@ def annulla_iscrizione(tavolo_id):
         abort(404)
 
     if tavolo["organizzatore_id"] == session["utente_id"]:
-        flash("L'organizzatore non può annullare l'iscrizione al proprio tavolo.")
+        flash("L'organizzatore non può annullare l'iscrizione al proprio banchetto.")
     else:
         esegui(conn,
                "DELETE FROM iscrizioni WHERE tavolo_id = ? AND utente_id = ?",
@@ -2455,7 +2455,7 @@ def elimina_tavolo(tavolo_id):
     esegui(conn, "DELETE FROM tavoli WHERE id = ?", (tavolo_id,))
     conn.commit()
     conn.close()
-    flash("Tavolo eliminato.")
+    flash("Banchetto eliminato.")
     return redirect(url_for("home"))
 
 

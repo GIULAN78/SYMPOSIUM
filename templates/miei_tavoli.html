@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>I miei tavoli - Symposium</title>
+    <title>I miei banchetti - Symposium</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0D5EAF">
@@ -13,13 +13,13 @@
     <header>
         <h1>Symposium</h1>
         <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('esci') }}">Esci</a></p>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
 
     <main>
-        <h3 class="titolo-sezione">Tavoli che organizzo</h3>
+        <h3 class="titolo-sezione">Banchetti che organizzo</h3>
         {% if organizzati|length == 0 %}
-            <p class="vuoto">Non hai ancora organizzato nessun tavolo.</p>
+            <p class="vuoto">Non hai ancora organizzato nessun banchetto.</p>
         {% endif %}
         <div class="lista-tavoli">
             {% for t in organizzati %}
@@ -32,9 +32,9 @@
             {% endfor %}
         </div>
 
-        <h3 class="titolo-sezione">Tavoli a cui partecipo</h3>
+        <h3 class="titolo-sezione">Banchetti a cui partecipo</h3>
         {% if partecipo|length == 0 %}
-            <p class="vuoto">Non sei iscritto a nessun tavolo di altri.</p>
+            <p class="vuoto">Non hai preso posto a nessun banchetto di altri.</p>
         {% endif %}
         <div class="lista-tavoli">
             {% for t in partecipo %}

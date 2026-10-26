@@ -12,7 +12,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
 
     <main>
@@ -30,20 +30,20 @@
                 <ul>
                     <li>Dati dell'account: nome, email, password (conservata solo in forma cifrata), data di nascita, città.</li>
                     <li>Dati facoltativi del profilo: foto, professione, formazione, descrizione, interessi.</li>
-                    <li>Attività sul servizio: tavoli creati, iscrizioni, messaggi della chat dei tavoli, valutazioni, presenze, amici, utenti bloccati, segnalazioni, notifiche.</li>
+                    <li>Attività sul servizio: banchetti creati, iscrizioni, messaggi della chat dei banchetti, valutazioni, presenze, amici, utenti bloccati, segnalazioni, notifiche.</li>
                 </ul>
 
                 <h3>A cosa servono</h3>
-                <p>Per far funzionare il servizio: creare e trovare tavoli, mostrare il profilo agli altri partecipanti, inviare notifiche, calcolare affidabilità e punti, tutelare gli utenti. La data di nascita serve a verificare la maggiore età e a rispettare le fasce d'età dei tavoli; il profilo mostra l'età, non la data.</p>
+                <p>Per far funzionare il servizio: creare e trovare banchetti, mostrare il profilo agli altri partecipanti, inviare notifiche, calcolare affidabilità e punti, tutelare gli utenti. La data di nascita serve a verificare la maggiore età e a rispettare le fasce d'età dei banchetti; il profilo mostra l'età, non la data.</p>
 
                 <h3>Chi vede cosa</h3>
-                <p>Nome, età, città, foto, interessi, badge e statistiche del profilo sono visibili agli altri utenti registrati. L'email non è mai mostrata agli altri utenti. I messaggi della chat sono visibili solo ai partecipanti del tavolo.</p>
+                <p>Nome, età, città, foto, interessi, badge e statistiche del profilo sono visibili agli altri utenti registrati. L'email non è mai mostrata agli altri utenti. I messaggi della chat sono visibili solo ai partecipanti del banchetto.</p>
 
                 <h3>Servizi esterni usati</h3>
                 <ul>
                     <li>Render (hosting e database, server nell'Unione Europea).</li>
                     <li>Cloudflare R2 (archiviazione delle foto).</li>
-                    <li>OpenStreetMap (mappa e ricerca dei locali): per mostrare un tavolo sulla mappa vengono inviati il nome del locale e la città, mai dati personali.</li>
+                    <li>OpenStreetMap (mappa e ricerca dei locali): per mostrare un banchetto sulla mappa vengono inviati il nome del locale e la città, mai dati personali.</li>
                 </ul>
 
                 <h3>Cookie</h3>
@@ -60,7 +60,7 @@
                 <p class="nota">Bozza in revisione. Ultimo aggiornamento: ottobre 2026.</p>
 
                 <h3>Cos'è Symposium</h3>
-                <p>Symposium è una piattaforma che permette di organizzare e partecipare a tavoli in locali pubblici per conoscere persone con interessi in comune. Symposium non è parte degli incontri e non gestisce i locali.</p>
+                <p>Symposium è una piattaforma che permette di organizzare e partecipare a banchetti in locali pubblici per conoscere persone con interessi in comune. Symposium non è parte degli incontri e non gestisce i locali.</p>
 
                 <h3>Chi può usarlo</h3>
                 <p>Solo persone maggiorenni. Ogni persona può avere un solo account e deve fornire dati veritieri.</p>
@@ -88,13 +88,13 @@
             {% else %}
                 <h2>Domande frequenti</h2>
 
-                <h3>Come partecipo a un tavolo?</h3>
-                <p>Dalla home o dalla mappa apri un tavolo e premi <strong>Partecipa</strong>. Puoi annullare finché la serata non è conclusa.</p>
+                <h3>Come partecipo a un banchetto?</h3>
+                <p>Dalla home o dalla mappa apri un banchetto e premi <strong>Prendi posto</strong>. Puoi annullare finché la serata non è conclusa.</p>
 
                 <h3>Cosa significa «Confermato»?</h3>
-                <p>Il tavolo ha raggiunto il numero minimo di partecipanti deciso dall'organizzatore.</p>
+                <p>Il banchetto ha raggiunto il numero minimo di partecipanti deciso dall'organizzatore.</p>
 
-                <h3>Perché non posso iscrivermi a un tavolo?</h3>
+                <h3>Perché non posso iscrivermi a un banchetto?</h3>
                 <p>Può essere completo, riservato a un'altra fascia d'età, riservato ai Premium, oppure creato da un utente con cui c'è un blocco.</p>
 
                 <h3>Come funzionano affidabilità e punti?</h3>

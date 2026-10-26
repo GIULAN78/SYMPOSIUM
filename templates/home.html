@@ -13,10 +13,10 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <p class="sottotitolo">Trova il tuo tavolo, condividi gli interessi</p>
+        <p class="sottotitolo">Iscriviti a Symposium e crea il tuo banchetto</p>
         {% if utente_nome %}
-            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('profilo_utente', utente_id=utente_id) }}">Profilo</a> · <a href="{{ url_for('miei_tavoli') }}">I miei tavoli</a> · <a href="{{ url_for('preferiti') }}">Preferiti</a> · <a href="{{ url_for('amici') }}">Amici</a> · <a href="{{ url_for('elenco_messaggi') }}">Messaggi</a> · <a href="{{ url_for('pagina_premium') }}">⭐ Premium</a> · <a href="{{ url_for('impostazioni') }}">Impostazioni</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
-            <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo') }}">+ Crea un tavolo</a>
+            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('profilo_utente', utente_id=utente_id) }}">Profilo</a> · <a href="{{ url_for('miei_tavoli') }}">I miei banchetti</a> · <a href="{{ url_for('preferiti') }}">Preferiti</a> · <a href="{{ url_for('amici') }}">Amici</a> · <a href="{{ url_for('elenco_messaggi') }}">Messaggi</a> · <a href="{{ url_for('pagina_premium') }}">⭐ Premium</a> · <a href="{{ url_for('impostazioni') }}">Impostazioni</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
+            <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo') }}">+ Crea il tuo banchetto</a>
         {% else %}
             <p class="nav-utente"><a href="{{ url_for('accedi') }}">Accedi</a> · <a href="{{ url_for('registrati') }}">Registrati</a></p>
         {% endif %}
@@ -51,7 +51,7 @@
         </form>
 
         {% if tavoli|length == 0 %}
-            <p class="vuoto">{% if q or citta or solo_eta or solo_confermati or fasce_sel %}Nessun tavolo corrisponde alla ricerca.{% else %}Nessun tavolo disponibile al momento. Creane uno tu!{% endif %}</p>
+            <p class="vuoto">{% if q or citta or solo_eta or solo_confermati or fasce_sel %}Nessun banchetto corrisponde alla ricerca.{% else %}Nessun banchetto disponibile al momento. Creane uno tu!{% endif %}</p>
         {% endif %}
 
         <div class="lista-tavoli">
@@ -66,7 +66,7 @@
                         <button type="submit" class="cuore" title="Preferito">{{ '❤️' if t.id in preferiti_ids else '🤍' }}</button>
                     </form>
                     {% endif %}
-                    <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if t.esclusivo %} <span class="badge badge-esc">⭐ Esclusivo</span>{% endif %}{% if t.su_richiesta %} <span class="badge badge-esc">🔒 Su richiesta</span>{% endif %}</h2>
+                    <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if t.esclusivo %} <span class="badge badge-esc">⭐ Banchetto degli dei</span>{% endif %}{% if t.su_richiesta %} <span class="badge badge-esc">🔒 Su richiesta</span>{% endif %}</h2>
                     <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}
                         {% if t.voti_locale %}<span class="badge badge-grad">👍 {{ t.voti_pos|percento(t.voti_locale) }}%</span>{% endif %}
                     </p>
@@ -84,11 +84,11 @@
                     <p class="posti">{{ t.iscritti }} / {{ t.posti_totali }} posti occupati{% if t.min_partecipanti %} · minimo {{ t.min_partecipanti }}{% endif %}</p>
 
                     {% if t.gia_iscritto %}
-                        <button class="btn-iscriviti" disabled>Sei iscritto ✓</button>
+                        <button class="btn-iscriviti" disabled>Hai preso posto ✓</button>
                     {% else %}
                     <form action="{{ url_for('iscriviti', tavolo_id=t.id) }}" method="POST">
                         <button type="submit" class="btn-iscriviti">
-                            {% if t.iscritti >= t.posti_totali %}📋 Completo · Lista d'attesa{% elif t.su_richiesta %}✋ Chiedi di partecipare{% else %}Partecipa{% endif %}
+                            {% if t.iscritti >= t.posti_totali %}📋 Completo · Lista d'attesa{% elif t.su_richiesta %}✋ Chiedi di partecipare{% else %}Prendi posto{% endif %}
                         </button>
                     </form>
                     {% endif %}

@@ -1,7 +1,7 @@
 {
   "name": "Symposium",
   "short_name": "Symposium",
-  "description": "Trova il tuo tavolo, condividi gli interessi",
+  "description": "Iscriviti a Symposium e crea il tuo banchetto",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

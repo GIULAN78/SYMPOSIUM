@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crea un tavolo - Symposium</title>
+    <title>Crea un banchetto - Symposium</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0D5EAF">
@@ -12,7 +12,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
 
     <main>
@@ -20,14 +20,14 @@
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
         <form class="form-tavolo" method="POST" action="{{ url_for('nuovo_tavolo') }}" enctype="multipart/form-data">
-            <label for="tema">Tema del tavolo</label>
+            <label for="tema">Tema del banchetto</label>
             <input type="text" id="tema" name="tema" placeholder="Es. Cena tra appassionati di storia" required>
 
             <label for="foto">Foto del locale o del piatto (opzionale)</label>
             <input type="file" id="foto" name="foto" accept="image/*">
 
             <label for="descrizione">Descrizione (opzionale)</label>
-            <textarea id="descrizione" name="descrizione" rows="4" placeholder="Di cosa si parlerà, che tipo di serata, chi cerchi al tavolo..."></textarea>
+            <textarea id="descrizione" name="descrizione" rows="4" placeholder="Di cosa si parlerà, che tipo di serata, chi cerchi al banchetto..."></textarea>
 
             <label for="locale">Locale</label>
             <input type="text" id="locale" name="locale" value="{{ request.args.get('locale', '') }}" placeholder="Nome del ristorante o locale" required>
@@ -41,7 +41,7 @@
             <label for="data_ora">Data e ora</label>
             <input type="datetime-local" id="data_ora" name="data_ora" required>
 
-            <label for="min_partecipanti">Minimo partecipanti per confermare il tavolo</label>
+            <label for="min_partecipanti">Minimo partecipanti per confermare il banchetto</label>
             <input type="number" id="min_partecipanti" name="min_partecipanti" min="2" max="20" value="4">
 
             <label for="posti_totali">Massimo partecipanti</label>
@@ -54,13 +54,13 @@
             <input type="number" id="eta_max" name="eta_max" min="18" max="99" value="65">
 
             <label for="obiettivo">Obiettivo (opzionale)</label>
-            <input type="text" id="obiettivo" name="obiettivo" placeholder="Es. Niente smartphone al tavolo">
+            <input type="text" id="obiettivo" name="obiettivo" placeholder="Es. Niente smartphone al banchetto">
 
             {% if sono_premium %}
-            <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Tavolo esclusivo (visibile solo ai Premium)</label>
+            <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Banchetto degli dei (riservato ai Premium)</label>
             {% endif %}
             <label class="riga-check"><input type="checkbox" name="su_richiesta" value="1"> 🔒 Su richiesta (approvo io chi partecipa)</label>
-            <button type="submit" class="btn-nuovo">Crea tavolo</button>
+            <button type="submit" class="btn-nuovo">Crea banchetto</button>
         </form>
     </main>
 <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>

@@ -12,7 +12,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
 
     <main>
@@ -49,9 +49,9 @@
         <div class="card-tavolo zona-pericolo">
             <div class="corpo-card">
                 <h2>Elimina account</h2>
-                <p>Verranno cancellati definitivamente il tuo profilo, le iscrizioni, i messaggi, le valutazioni e <strong>anche i tavoli che hai organizzato</strong>, con le iscrizioni degli altri partecipanti. L'operazione non si può annullare.</p>
+                <p>Verranno cancellati definitivamente il tuo profilo, le iscrizioni, i messaggi, le valutazioni e <strong>anche i banchetti che hai organizzato</strong>, con le iscrizioni degli altri partecipanti. L'operazione non si può annullare.</p>
                 <form class="form-tavolo form-nobordo" method="POST" action="{{ url_for('elimina_account') }}"
-                      onsubmit="return confirm('Eliminare DEFINITIVAMENTE il tuo account e i tavoli che hai organizzato?');">
+                      onsubmit="return confirm('Eliminare DEFINITIVAMENTE il tuo account e i banchetti che hai organizzato?');">
                     <label for="password">Conferma con la tua password</label>
                     <input type="password" id="password" name="password" required>
                     <button type="submit" class="btn-annulla">Elimina il mio account</button>

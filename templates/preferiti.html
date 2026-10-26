@@ -12,7 +12,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
 
     <main>
@@ -20,9 +20,9 @@
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
 
-        <h3 class="titolo-sezione">❤️ Tavoli preferiti</h3>
+        <h3 class="titolo-sezione">❤️ Banchetti preferiti</h3>
         {% if not tavoli %}
-            <p class="vuoto">Nessun tavolo nei preferiti. Tocca il cuore su un tavolo per salvarlo.</p>
+            <p class="vuoto">Nessun banchetto nei preferiti. Tocca il cuore su un banchetto per salvarlo.</p>
         {% endif %}
         <div class="lista-tavoli">
             {% for t in tavoli %}
@@ -40,7 +40,7 @@
 
         <h3 class="titolo-sezione">🔔 Locali che segui</h3>
         {% if not seguiti %}
-            <p class="vuoto">Non segui nessun locale. Aprendo un tavolo puoi seguire il suo locale.</p>
+            <p class="vuoto">Non segui nessun locale. Aprendo un banchetto puoi seguire il suo locale.</p>
         {% endif %}
         <div class="lista-tavoli">
             {% for l in seguiti %}

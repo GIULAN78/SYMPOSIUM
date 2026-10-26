@@ -13,7 +13,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
 
     <main>
@@ -79,16 +79,16 @@
                 {% endif %}
 
                 {% if not utente_nome %}
-                    <p class="link-alt"><a href="{{ url_for('accedi') }}">Accedi</a> per iscriverti a questo tavolo.</p>
+                    <p class="link-alt"><a href="{{ url_for('accedi') }}">Accedi</a> per prendere posto a questo banchetto.</p>
                 {% elif sono_organizzatore %}
                     <button class="btn-iscriviti" disabled>Sei l'organizzatore</button>
-                    <a class="btn-nuovo" href="{{ url_for('chat_tavolo', tavolo_id=tavolo.id) }}">💬 Chat del tavolo</a>
+                    <a class="btn-nuovo" href="{{ url_for('chat_tavolo', tavolo_id=tavolo.id) }}">💬 Chat del banchetto</a>
                     <form action="{{ url_for('elimina_tavolo', tavolo_id=tavolo.id) }}" method="POST"
-                          onsubmit="return confirm('Eliminare definitivamente questo tavolo e tutte le iscrizioni?');">
-                        <button type="submit" class="btn-annulla">Elimina tavolo</button>
+                          onsubmit="return confirm('Eliminare definitivamente questo banchetto e tutte le iscrizioni?');">
+                        <button type="submit" class="btn-annulla">Elimina banchetto</button>
                     </form>
                 {% elif gia_iscritto %}
-                    <a class="btn-nuovo" href="{{ url_for('chat_tavolo', tavolo_id=tavolo.id) }}">💬 Chat del tavolo</a>
+                    <a class="btn-nuovo" href="{{ url_for('chat_tavolo', tavolo_id=tavolo.id) }}">💬 Chat del banchetto</a>
                     {% if not concluso %}
                     <form action="{{ url_for('annulla_iscrizione', tavolo_id=tavolo.id) }}" method="POST">
                         <button type="submit" class="btn-annulla">Annulla iscrizione</button>
@@ -97,14 +97,14 @@
                 {% elif not concluso %}
                     <form action="{{ url_for('iscriviti', tavolo_id=tavolo.id) }}" method="POST">
                         <button type="submit" class="btn-iscriviti">
-                            {% if completo %}📋 Completo · Lista d'attesa{% elif su_richiesta %}✋ Chiedi di partecipare{% else %}Partecipa{% endif %}
+                            {% if completo %}📋 Completo · Lista d'attesa{% elif su_richiesta %}✋ Chiedi di partecipare{% else %}Prendi posto{% endif %}
                         </button>
                     </form>
                 {% endif %}
             </div>
         </div>
 
-        {% if su_richiesta %}<p class="nota-mappa">🔒 Tavolo su richiesta: l'organizzatore approva i partecipanti.</p>{% endif %}
+        {% if su_richiesta %}<p class="nota-mappa">🔒 Banchetto su richiesta: l'organizzatore approva i partecipanti.</p>{% endif %}
 
         {% if mia_richiesta %}
         <div class="card-tavolo"><div class="corpo-card">

@@ -13,7 +13,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
     <main>
         {% with messaggi = get_flashed_messages() %}
@@ -62,7 +62,7 @@
                 <form action="{{ url_for('amico', altro_id=u.id) }}" method="POST">
                     <button type="submit" class="btn-piccolo">{{ '✅ Nei tuoi amici' if e_amico else '➕ Aggiungi agli amici' }}</button>
                 </form>
-                <form action="{{ url_for('blocca', altro_id=u.id) }}" method="POST" {% if not e_bloccato %}onsubmit="return confirm('Bloccare questo utente? Non vedrete più i rispettivi tavoli.');"{% endif %}>
+                <form action="{{ url_for('blocca', altro_id=u.id) }}" method="POST" {% if not e_bloccato %}onsubmit="return confirm('Bloccare questo utente? Non vedrete più i rispettivi banchetti.');"{% endif %}>
                     <button type="submit" class="btn-piccolo">{{ '✔️ Sblocca' if e_bloccato else '🚫 Blocca' }}</button>
                 </form>
             </div>

@@ -12,7 +12,7 @@
 <body>
     <header>
         <h1>Symposium</h1>
-        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
     </header>
     <main>
         {% with messaggi = get_flashed_messages() %}
@@ -37,7 +37,7 @@
             <label for="interessi">Interessi (separati da virgola)</label>
             <input type="text" id="interessi" name="interessi" placeholder="Es. storia, cinema, viaggi, cucina">
 
-            <button type="submit" class="btn-nuovo">Crea account</button>
+            <button type="submit" class="btn-nuovo">Unisciti a Symposium</button>
             <p class="link-alt">Hai già un account? <a href="{{ url_for('accedi') }}">Accedi</a></p>
         </form>
     </main>
