@@ -32,7 +32,7 @@
             <a class="notifica {% if c.non_letti %}non-letta{% endif %}" href="{{ url_for('chat_privata', altro_id=c.id) }}">
                 {{ avatar(c.foto_url, c.nome) }}
                 <div class="info-part">
-                    <strong>{{ c.nome }}</strong>
+                    <strong>{{ c.nome }}</strong>{% if c.match %} <span class="badge badge-grad">🤝 Match</span>{% endif %}
                     {% if c.non_letti %}<span class="badge badge-ass">{{ c.non_letti }}</span>{% endif %}
                     <p>{{ c.ultimo[:70] }}{% if c.ultimo|length > 70 %}…{% endif %}</p>
                     <span class="nota">{{ c.ora }}</span>

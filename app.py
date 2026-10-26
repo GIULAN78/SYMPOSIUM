@@ -274,6 +274,14 @@ def init_db():
 
     aggiungi_colonna(conn, "utenti", "notif_tavoli", "INTEGER DEFAULT 1")
     esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS preferiti_utenti (
+            id {pk},
+            utente_id INTEGER REFERENCES utenti (id),
+            salvato_id INTEGER REFERENCES utenti (id),
+            UNIQUE (utente_id, salvato_id)
+        )
+    """)
+    esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS messaggi_privati (
             id {pk},
             da_utente INTEGER REFERENCES utenti (id),
@@ -1077,6 +1085,8 @@ def blocca(altro_id):
         esegui(conn, "INSERT INTO bloccati (utente_id, bloccato_id) VALUES (?, ?)", (uid, altro_id))
         esegui(conn, "DELETE FROM amici WHERE (utente_id = ? AND amico_id = ?) OR (utente_id = ? AND amico_id = ?)",
                (uid, altro_id, altro_id, uid))
+        esegui(conn, "DELETE FROM preferiti_utenti WHERE (utente_id = ? AND salvato_id = ?) OR (utente_id = ? AND salvato_id = ?)",
+               (uid, altro_id, altro_id, uid))
         flash("Utente bloccato.")
     conn.commit()
     conn.close()
@@ -1267,6 +1277,7 @@ def elimina_account():
         "DELETE FROM segnalazioni WHERE da_utente = ? OR utente_id = ?",
         "DELETE FROM notifiche WHERE utente_id = ? OR da_utente = ?",
         "DELETE FROM richieste WHERE utente_id = ?",
+        "DELETE FROM preferiti_utenti WHERE utente_id = ? OR salvato_id = ?",
         "DELETE FROM messaggi_privati WHERE da_utente = ? OR a_utente = ?",
         "DELETE FROM iscrizioni WHERE utente_id = ?",
         "DELETE FROM utenti WHERE id = ?",
@@ -1421,7 +1432,7 @@ def puo_scrivere(conn, uid, altro):
         return False
     r = esegui(conn, "SELECT 1 AS ok FROM amici WHERE (utente_id = ? AND amico_id = ?) OR (utente_id = ? AND amico_id = ?)",
                (uid, altro, altro, uid)).fetchone()
-    return r is not None
+    return r is not None or e_match(conn, uid, altro)
 
 
 @app.after_request
@@ -1464,6 +1475,13 @@ def elenco_messaggi():
     ):
         for r in esegui(conn, sql, (uid,)).fetchall():
             ids.add(r["x"])
+    match_ids = {r["x"] for r in esegui(conn, """
+        SELECT p.salvato_id AS x
+        FROM preferiti_utenti p
+        JOIN preferiti_utenti q ON q.utente_id = p.salvato_id AND q.salvato_id = p.utente_id
+        WHERE p.utente_id = ?
+    """, (uid,)).fetchall()}
+    ids |= match_ids
     ids.discard(uid)
     ids -= relazioni_bloccate(conn, uid)
 
@@ -1485,8 +1503,9 @@ def elenco_messaggi():
             ora = ""
         conversazioni.append({
             "id": altro, "nome": u["nome"], "foto_url": u["foto_url"],
-            "ultimo": (("Tu: " if ultimo["da_utente"] == uid else "") + ultimo["testo"]) if ultimo else "Nessun messaggio ancora",
+            "ultimo": (("Tu: " if ultimo["da_utente"] == uid else "") + ultimo["testo"]) if ultimo else ("Hai appena ricevuto un match!" if altro in match_ids else "Nessun messaggio ancora"),
             "ora": ora, "non_letti": int(non_letti), "ordine": ultimo["id"] if ultimo else 0,
+            "match": altro in match_ids,
         })
     conn.close()
     conversazioni.sort(key=lambda c: c["ordine"], reverse=True)
@@ -1569,6 +1588,64 @@ def chat_privata_invia(altro_id):
         conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+
+def e_match(conn, a, b):
+    r = esegui(conn, """
+        SELECT 1 AS ok FROM preferiti_utenti p
+        JOIN preferiti_utenti q ON q.utente_id = p.salvato_id AND q.salvato_id = p.utente_id
+        WHERE p.utente_id = ? AND p.salvato_id = ?
+    """, (a, b)).fetchone()
+    return r is not None
+
+
+def stato_match(altro_id):
+    uid = session.get("utente_id")
+    if not uid or uid == altro_id:
+        return {"salvato": False, "match": False}
+    conn = get_db()
+    r = esegui(conn, "SELECT 1 AS ok FROM preferiti_utenti WHERE utente_id = ? AND salvato_id = ?",
+               (uid, altro_id)).fetchone()
+    m = e_match(conn, uid, altro_id)
+    conn.close()
+    return {"salvato": r is not None, "match": m}
+
+
+@app.route("/utente/<int:altro_id>/salva-profilo", methods=["POST"])
+@login_richiesto
+def salva_profilo(altro_id):
+    uid = session["utente_id"]
+    if altro_id == uid:
+        abort(400)
+    conn = get_db()
+    altro = utente_per_id(conn, altro_id)
+    if not altro:
+        conn.close()
+        abort(404)
+    if altro_id in relazioni_bloccate(conn, uid):
+        conn.close()
+        flash("Non puoi salvare questo profilo.")
+        return redirect(url_for("profilo_utente", utente_id=altro_id))
+    r = esegui(conn, "SELECT id FROM preferiti_utenti WHERE utente_id = ? AND salvato_id = ?",
+               (uid, altro_id)).fetchone()
+    if r:
+        esegui(conn, "DELETE FROM preferiti_utenti WHERE id = ?", (r["id"],))
+        flash("Profilo rimosso dai preferiti.")
+    else:
+        esegui(conn, "INSERT INTO preferiti_utenti (utente_id, salvato_id) VALUES (?, ?)", (uid, altro_id))
+        if e_match(conn, uid, altro_id):
+            notifica(conn, altro_id, "match", session.get("utente_nome") or "Nuovo match",
+                     "🤝 Hai un match! Ora potete scrivervi.",
+                     url_for("chat_privata", altro_id=uid), uid)
+            notifica(conn, uid, "match", altro["nome"],
+                     "🤝 Hai un match! Ora potete scrivervi.",
+                     url_for("chat_privata", altro_id=altro_id), altro_id)
+            flash("🤝 È un match! Ora potete scrivervi.")
+        else:
+            flash("Profilo salvato nei preferiti.")
+    conn.commit()
+    conn.close()
+    return redirect(url_for("profilo_utente", utente_id=altro_id))
 
 
 @app.route("/miei-tavoli")
@@ -2017,6 +2094,7 @@ def profilo_utente(utente_id):
         mio=(session.get("utente_id") == utente_id),
         **stato_relazione(utente_id),
         **info_badge(utente_id),
+        **stato_match(utente_id),
     )
 
 
