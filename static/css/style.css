@@ -1087,3 +1087,75 @@ header::after {
 .pulsante-wallet {
     margin-left: 0.5rem;
 }
+
+/* Tema attenuato */
+:root {
+    --notte: #123a66;
+    --notte-chiaro: #1b4f86;
+    --oro: #e3c458;
+    --oro-chiaro: #efd98a;
+    --avorio: #dfe8f3;
+    --avorio-scuro: #b9c8dc;
+    --bordeaux: #a8344f;
+    --testo: #12304f;
+}
+
+body {
+    background: #1b4f86;
+}
+
+body, input, textarea, select, button, label, a, p, span, li, td, th, small, strong, h1, h2, h3 {
+    font-weight: 700;
+}
+
+header {
+    background: #123a66;
+    border-bottom: 3px solid var(--oro);
+}
+
+.form-tavolo input,
+.form-tavolo textarea,
+.tag,
+.pill,
+.bolla,
+.descrizione,
+.valuta,
+.lista-stat {
+    background: #f1f5fa;
+}
+
+.notifica.non-letta {
+    background: #f1e8c2;
+}
+
+.badge-conf {
+    background: #2f8a5a;
+}
+
+.badge-ass {
+    background: #a8344f;
+}
+
+.badge-fine {
+    background: #55677f;
+}
+
+.copertina,
+.banner-home,
+.anteprima-img,
+.avatar {
+    filter: saturate(0.85) brightness(0.92);
+}
+
+body::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(10, 25, 50, 0.10);
+    pointer-events: none;
+    z-index: 40;
+}
+/* Fine tema attenuato */
