@@ -979,7 +979,7 @@ main > .riga-org {
 :root {
     --notte: #0a4a8a;
     --notte-chiaro: #0D5EAF;
-    --oro: #ffe14d;
+    --oro: #c9a24a;
     --oro-chiaro: #fff08a;
     --avorio: #eef6ff;
     --avorio-scuro: #c3d9f2;
@@ -1092,8 +1092,8 @@ header::after {
 :root {
     --notte: #123a66;
     --notte-chiaro: #1b4f86;
-    --oro: #e3c458;
-    --oro-chiaro: #efd98a;
+    --oro: #c9a24a;
+    --oro-chiaro: #dcc07a;
     --avorio: #dfe8f3;
     --avorio-scuro: #b9c8dc;
     --bordeaux: #a8344f;
@@ -1159,3 +1159,42 @@ body::after {
     z-index: 40;
 }
 /* Fine tema attenuato */
+
+/* Font classici */
+html {
+    font-size: 112%;
+}
+
+body, input, textarea, select, label, p, li, td, th, small, a, span {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 700;
+}
+
+header h1 {
+    font-family: 'Cinzel Decorative', Georgia, serif;
+    font-weight: 900;
+    letter-spacing: 4px;
+}
+
+h1, h2, h3, .titolo-sezione, .etichetta, .badge, .titolo-fasce {
+    font-family: 'Cinzel Decorative', Georgia, serif;
+    font-weight: 700;
+}
+
+.card-tavolo h2 {
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+}
+
+.btn-nuovo, .btn-indietro, .btn-iscriviti, .btn-annulla, .btn-piccolo, button {
+    font-family: 'Cinzel Decorative', Georgia, serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+}
+
+.sottotitolo {
+    font-style: italic;
+    font-size: 1.1rem;
+}
+/* Fine font classici */
