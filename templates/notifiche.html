@@ -1,0 +1,60 @@
+{% from "_macro.html" import avatar %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifiche - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <div class="intest-notifiche">
+            <h3 class="titolo-sezione">🔔 Notifiche</h3>
+            {% if notifiche %}
+            <form action="{{ url_for('notifiche_lette') }}" method="POST">
+                <button type="submit" class="btn-piccolo btn-chiaro">✓ Segna tutte come lette</button>
+            </form>
+            {% endif %}
+        </div>
+
+        <form class="pref-notifiche" action="{{ url_for('notifiche_preferenze') }}" method="POST">
+            <label>
+                <input type="checkbox" name="notif_tavoli" value="1" {% if attive %}checked{% endif %}>
+                Avvisami quando viene creato un tavolo nella mia città
+            </label>
+            <button type="submit" class="btn-piccolo btn-chiaro">Salva</button>
+        </form>
+
+        {% if not notifiche %}
+            <p class="vuoto">Nessuna notifica per ora.</p>
+        {% endif %}
+
+        <div class="lista-notifiche">
+            {% for n in notifiche %}
+            <a class="notifica {% if not n.letta %}non-letta{% endif %}" href="{{ url_for('apri_notifica', notifica_id=n.id) }}">
+                {{ avatar(n.da_foto, n.da_nome or 'Symposium') }}
+                <div>
+                    <strong>{{ n.titolo }}</strong>
+                    <p>{{ n.testo }}</p>
+                    <span class="nota">{{ n.creato_il|data_it }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

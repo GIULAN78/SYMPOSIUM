@@ -272,6 +272,22 @@ def init_db():
         )
     """)
 
+    aggiungi_colonna(conn, "utenti", "notif_tavoli", "INTEGER DEFAULT 1")
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS notifiche (
+            id {pk},
+            utente_id INTEGER REFERENCES utenti (id),
+            tipo TEXT,
+            titolo TEXT,
+            testo TEXT,
+            link TEXT,
+            da_utente INTEGER,
+            creato_il TEXT,
+            letta INTEGER DEFAULT 0
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -424,6 +440,35 @@ def banner_valutazione(risposta):
     return risposta
 
 
+@app.after_request
+def campanella(risposta):
+    try:
+        if (
+            "utente_id" not in session
+            or risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint in (None, "static", "service_worker")
+        ):
+            return risposta
+
+        conn = get_db()
+        n = esegui(conn, "SELECT COUNT(*) AS n FROM notifiche WHERE utente_id = ? AND letta = 0",
+                   (session["utente_id"],)).fetchone()["n"]
+        conn.close()
+
+        badge = ""
+        if n:
+            badge = '<span class="campanella-n">' + (str(n) if n < 100 else "99+") + "</span>"
+        html = '<a class="campanella" href="' + url_for("notifiche") + '" aria-label="Notifiche">🔔' + badge + "</a>"
+
+        testo = risposta.get_data(as_text=True)
+        if "</body>" in testo:
+            risposta.set_data(testo.replace("</body>", html + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
+
+
 def utente_per_id(conn, utente_id):
     if not utente_id:
         return None
@@ -484,6 +529,70 @@ def home():
     return render_template("home.html", tavoli=tavoli, q=q, citta=citta,
                            solo_eta=solo_eta, solo_confermati=solo_confermati,
                            fasce=FASCE, fasce_sel=fasce_sel)
+
+
+def notifica(conn, utente_id, tipo, titolo, testo, link, da_utente=None):
+    esegui(conn, """
+        INSERT INTO notifiche (utente_id, tipo, titolo, testo, link, da_utente, creato_il, letta)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    """, (utente_id, tipo, titolo, testo, link, da_utente, datetime.now().isoformat()))
+
+
+@app.route("/notifiche")
+@login_richiesto
+def notifiche():
+    uid = session["utente_id"]
+    conn = get_db()
+    righe = esegui(conn, """
+        SELECT n.id, n.titolo, n.testo, n.creato_il, n.letta, n.da_utente,
+               u.nome AS da_nome, u.foto_url AS da_foto
+        FROM notifiche n
+        LEFT JOIN utenti u ON u.id = n.da_utente
+        WHERE n.utente_id = ?
+        ORDER BY n.id DESC
+        LIMIT 100
+    """, (uid,)).fetchall()
+    io = utente_per_id(conn, uid)
+    conn.close()
+    attive = io["notif_tavoli"] in (None, 1)
+    return render_template("notifiche.html", notifiche=righe, attive=attive)
+
+
+@app.route("/notifiche/<int:notifica_id>/apri")
+@login_richiesto
+def apri_notifica(notifica_id):
+    conn = get_db()
+    n = esegui(conn, "SELECT link FROM notifiche WHERE id = ? AND utente_id = ?",
+               (notifica_id, session["utente_id"])).fetchone()
+    if not n:
+        conn.close()
+        abort(404)
+    esegui(conn, "UPDATE notifiche SET letta = 1 WHERE id = ?", (notifica_id,))
+    conn.commit()
+    conn.close()
+    return redirect(n["link"] or url_for("notifiche"))
+
+
+@app.route("/notifiche/lette", methods=["POST"])
+@login_richiesto
+def notifiche_lette():
+    conn = get_db()
+    esegui(conn, "UPDATE notifiche SET letta = 1 WHERE utente_id = ?", (session["utente_id"],))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("notifiche"))
+
+
+@app.route("/notifiche/preferenze", methods=["POST"])
+@login_richiesto
+def notifiche_preferenze():
+    valore = 1 if request.form.get("notif_tavoli") == "1" else 0
+    conn = get_db()
+    esegui(conn, "UPDATE utenti SET notif_tavoli = ? WHERE id = ?", (valore, session["utente_id"]))
+    conn.commit()
+    conn.close()
+    flash("Preferenze salvate.")
+    return redirect(url_for("notifiche"))
 
 
 @app.route("/miei-tavoli")
@@ -1009,6 +1118,15 @@ def nuovo_tavolo():
         esegui(conn,
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
+        if citta:
+            destinatari = esegui(conn, """
+                SELECT id FROM utenti
+                WHERE id != ? AND LOWER(COALESCE(citta, '')) = LOWER(?) AND COALESCE(notif_tavoli, 1) = 1
+            """, (utente_id, citta)).fetchall()
+            for d in destinatari:
+                notifica(conn, d["id"], "nuovo_tavolo", locale_nome,
+                         f"{session.get('utente_nome')} ha creato un tavolo che potrebbe interessarti",
+                         url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
         conn.commit()
         conn.close()
         return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
@@ -1052,6 +1170,21 @@ def iscriviti(tavolo_id):
             esegui(conn,
                    "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                    (tavolo_id, session["utente_id"], datetime.now().isoformat()))
+            info = esegui(conn, "SELECT tema, organizzatore_id, min_partecipanti FROM tavoli WHERE id = ?",
+                          (tavolo_id,)).fetchone()
+            link_t = url_for("dettaglio_tavolo", tavolo_id=tavolo_id)
+            if info and info["organizzatore_id"] != session["utente_id"]:
+                notifica(conn, info["organizzatore_id"], "iscrizione", info["tema"],
+                         f"{session.get('utente_nome')} si è iscritto al tuo tavolo",
+                         link_t, session["utente_id"])
+            totale = esegui(conn, "SELECT COUNT(*) AS n FROM iscrizioni WHERE tavolo_id = ?",
+                            (tavolo_id,)).fetchone()["n"]
+            if info and info["min_partecipanti"] and totale == info["min_partecipanti"]:
+                for r in esegui(conn, "SELECT utente_id FROM iscrizioni WHERE tavolo_id = ?",
+                                (tavolo_id,)).fetchall():
+                    notifica(conn, r["utente_id"], "confermato", info["tema"],
+                             "Il tavolo è confermato: è stato raggiunto il numero minimo di partecipanti",
+                             link_t)
             conn.commit()
         except IntegrityError:
             conn.rollback()
@@ -1075,6 +1208,10 @@ def annulla_iscrizione(tavolo_id):
         esegui(conn,
                "DELETE FROM iscrizioni WHERE tavolo_id = ? AND utente_id = ?",
                (tavolo_id, session["utente_id"]))
+        riga_t = esegui(conn, "SELECT tema FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+        notifica(conn, tavolo["organizzatore_id"], "annullo", riga_t["tema"],
+                 f"{session.get('utente_nome')} ha annullato la partecipazione",
+                 url_for("dettaglio_tavolo", tavolo_id=tavolo_id), session["utente_id"])
         conn.commit()
         flash("Iscrizione annullata.")
     conn.close()
