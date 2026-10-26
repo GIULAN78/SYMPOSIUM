@@ -950,3 +950,13 @@ details.segnala form {
 .testo-legale li {
     margin: 0.3rem 0;
 }
+
+.azioni-ric {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.azioni-ric .btn-iscriviti {
+    margin-top: 0;
+}

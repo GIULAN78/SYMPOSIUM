@@ -96,13 +96,51 @@
                     {% endif %}
                 {% elif not concluso %}
                     <form action="{{ url_for('iscriviti', tavolo_id=tavolo.id) }}" method="POST">
-                        <button type="submit" class="btn-iscriviti" {% if completo %}disabled{% endif %}>
-                            {% if completo %}Completo{% else %}Partecipa{% endif %}
+                        <button type="submit" class="btn-iscriviti">
+                            {% if completo %}📋 Completo · Lista d'attesa{% elif su_richiesta %}✋ Chiedi di partecipare{% else %}Partecipa{% endif %}
                         </button>
                     </form>
                 {% endif %}
             </div>
         </div>
+
+        {% if su_richiesta %}<p class="nota-mappa">🔒 Tavolo su richiesta: l'organizzatore approva i partecipanti.</p>{% endif %}
+
+        {% if mia_richiesta %}
+        <div class="card-tavolo"><div class="corpo-card">
+            {% if mia_richiesta == 'attesa' %}
+            <p>⏳ Richiesta inviata: attendi l'approvazione dell'organizzatore.</p>
+            {% else %}
+            <p>📋 Sei in lista d'attesa (posizione {{ pos_coda }}). Se si libera un posto entri automaticamente.</p>
+            {% endif %}
+            <form action="{{ url_for('ritira_richiesta', tavolo_id=tavolo.id) }}" method="POST">
+                <button type="submit" class="btn-annulla">Ritira richiesta</button>
+            </form>
+        </div></div>
+        {% endif %}
+
+        {% if sono_organizzatore and richieste_attesa %}
+        <h3 class="titolo-sezione">Richieste in attesa ({{ richieste_attesa|length }})</h3>
+        <div class="lista-partecipanti">
+            {% for r in richieste_attesa %}
+            <div class="partecipante riga-partecipante">
+                {{ avatar(r.foto_url, r.nome) }}
+                <div class="info-part">
+                    <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=r.id) }}"><strong>{{ r.nome }}</strong></a>
+                    <p class="interessi">{% if r.eta %}{{ r.eta }} anni{% endif %}{% if r.citta %}, {{ r.citta }}{% endif %}</p>
+                </div>
+                <div class="azioni-ric">
+                    <form action="{{ url_for('gestisci_richiesta', tavolo_id=tavolo.id, utente_target=r.id, azione='approva') }}" method="POST">
+                        <button type="submit" class="btn-iscriviti">✓ Accetta</button>
+                    </form>
+                    <form action="{{ url_for('gestisci_richiesta', tavolo_id=tavolo.id, utente_target=r.id, azione='rifiuta') }}" method="POST">
+                        <button type="submit" class="btn-piccolo">✕ Rifiuta</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         <h3 class="titolo-sezione">Partecipanti ({{ partecipanti|length }}/{{ tavolo.posti_totali }})</h3>
         <div class="lista-partecipanti">

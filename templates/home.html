@@ -66,7 +66,7 @@
                         <button type="submit" class="cuore" title="Preferito">{{ '❤️' if t.id in preferiti_ids else '🤍' }}</button>
                     </form>
                     {% endif %}
-                    <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if t.esclusivo %} <span class="badge badge-esc">⭐ Esclusivo</span>{% endif %}</h2>
+                    <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if t.esclusivo %} <span class="badge badge-esc">⭐ Esclusivo</span>{% endif %}{% if t.su_richiesta %} <span class="badge badge-esc">🔒 Su richiesta</span>{% endif %}</h2>
                     <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}
                         {% if t.voti_locale %}<span class="badge badge-grad">👍 {{ t.voti_pos|percento(t.voti_locale) }}%</span>{% endif %}
                     </p>
@@ -87,8 +87,8 @@
                         <button class="btn-iscriviti" disabled>Sei iscritto ✓</button>
                     {% else %}
                     <form action="{{ url_for('iscriviti', tavolo_id=t.id) }}" method="POST">
-                        <button type="submit" class="btn-iscriviti" {% if t.iscritti >= t.posti_totali %}disabled{% endif %}>
-                            {% if t.iscritti >= t.posti_totali %}Completo{% else %}Partecipa{% endif %}
+                        <button type="submit" class="btn-iscriviti">
+                            {% if t.iscritti >= t.posti_totali %}📋 Completo · Lista d'attesa{% elif t.su_richiesta %}✋ Chiedi di partecipare{% else %}Partecipa{% endif %}
                         </button>
                     </form>
                     {% endif %}

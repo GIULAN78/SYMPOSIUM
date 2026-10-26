@@ -273,6 +273,17 @@ def init_db():
     """)
 
     aggiungi_colonna(conn, "utenti", "notif_tavoli", "INTEGER DEFAULT 1")
+    aggiungi_colonna(conn, "tavoli", "su_richiesta", "INTEGER DEFAULT 0")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS richieste (
+            id {pk},
+            tavolo_id INTEGER REFERENCES tavoli (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            stato TEXT NOT NULL,
+            creato_il TEXT,
+            UNIQUE (tavolo_id, utente_id)
+        )
+    """)
     aggiungi_colonna(conn, "utenti", "premium", "INTEGER DEFAULT 0")
     aggiungi_colonna(conn, "tavoli", "esclusivo", "INTEGER DEFAULT 0")
     esegui(conn, "CREATE TABLE IF NOT EXISTS impostazioni (chiave TEXT PRIMARY KEY, valore TEXT)")
@@ -722,7 +733,7 @@ def home():
     conn = get_db()
     tavoli = esegui(conn, """
         SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.citta, t.foto_url,
-               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng, t.esclusivo,
+               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng, t.esclusivo, t.su_richiesta,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome,
                u.foto_url AS organizzatore_foto,
@@ -1159,7 +1170,7 @@ def admin_utente_premium(utente_target):
 def cancella_tavoli(conn, ids):
     for tid in ids:
         for tab in ("messaggi", "valutazioni_criteri", "compatibilita", "presenze",
-                    "valutazioni_locale", "assenze", "preferiti", "iscrizioni"):
+                    "valutazioni_locale", "assenze", "preferiti", "richieste", "iscrizioni"):
             esegui(conn, f"DELETE FROM {tab} WHERE tavolo_id = ?", (tid,))
         esegui(conn, "DELETE FROM tavoli WHERE id = ?", (tid,))
 
@@ -1245,6 +1256,7 @@ def elimina_account():
         "DELETE FROM bloccati WHERE utente_id = ? OR bloccato_id = ?",
         "DELETE FROM segnalazioni WHERE da_utente = ? OR utente_id = ?",
         "DELETE FROM notifiche WHERE utente_id = ? OR da_utente = ?",
+        "DELETE FROM richieste WHERE utente_id = ?",
         "DELETE FROM iscrizioni WHERE utente_id = ?",
         "DELETE FROM utenti WHERE id = ?",
     ):
@@ -1273,6 +1285,122 @@ def termini():
 @app.route("/faq")
 def faq():
     return pagina_info("faq")
+
+
+def promuovi_coda(conn, tavolo_id):
+    t = esegui(conn, "SELECT tema, posti_totali, organizzatore_id, su_richiesta FROM tavoli WHERE id = ?",
+               (tavolo_id,)).fetchone()
+    if not t:
+        return
+    link = url_for("dettaglio_tavolo", tavolo_id=tavolo_id)
+    while True:
+        n = esegui(conn, "SELECT COUNT(*) AS n FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,)).fetchone()["n"]
+        if n >= t["posti_totali"]:
+            break
+        r = esegui(conn, "SELECT id, utente_id FROM richieste WHERE tavolo_id = ? AND stato = ? ORDER BY id ASC LIMIT 1",
+                   (tavolo_id, "coda")).fetchone()
+        if not r:
+            break
+        if t["su_richiesta"]:
+            esegui(conn, "UPDATE richieste SET stato = ? WHERE id = ?", ("attesa", r["id"]))
+            notifica(conn, t["organizzatore_id"], "richiesta", t["tema"],
+                     "Si è liberato un posto: c'è una richiesta in attesa da approvare", link, r["utente_id"])
+            notifica(conn, r["utente_id"], "coda", t["tema"],
+                     "Si è liberato un posto: l'organizzatore deve approvare la tua richiesta", link)
+            break
+        esegui(conn, "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
+               (tavolo_id, r["utente_id"], datetime.now().isoformat()))
+        esegui(conn, "DELETE FROM richieste WHERE id = ?", (r["id"],))
+        notifica(conn, r["utente_id"], "coda", t["tema"],
+                 "Si è liberato un posto: ora partecipi al tavolo!", link)
+
+
+def dati_richieste(tavolo_id):
+    uid = session.get("utente_id")
+    conn = get_db()
+    t = esegui(conn, "SELECT su_richiesta, organizzatore_id FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    out = {"su_richiesta": bool(t and t["su_richiesta"]), "mia_richiesta": None,
+           "pos_coda": 0, "richieste_attesa": []}
+    if uid:
+        r = esegui(conn, "SELECT id, stato FROM richieste WHERE tavolo_id = ? AND utente_id = ?",
+                   (tavolo_id, uid)).fetchone()
+        if r:
+            out["mia_richiesta"] = r["stato"]
+            if r["stato"] == "coda":
+                out["pos_coda"] = esegui(
+                    conn, "SELECT COUNT(*) AS n FROM richieste WHERE tavolo_id = ? AND stato = ? AND id <= ?",
+                    (tavolo_id, "coda", r["id"])).fetchone()["n"]
+        if t and t["organizzatore_id"] == uid:
+            righe = esegui(conn, """
+                SELECT u.id, u.nome, u.foto_url, u.citta, u.data_nascita
+                FROM richieste r JOIN utenti u ON u.id = r.utente_id
+                WHERE r.tavolo_id = ? AND r.stato = ?
+                ORDER BY r.id ASC
+            """, (tavolo_id, "attesa")).fetchall()
+            for x in righe:
+                d = dict(x)
+                d["eta"] = eta_da(d["data_nascita"])
+                out["richieste_attesa"].append(d)
+    conn.close()
+    return out
+
+
+@app.route("/tavolo/<int:tavolo_id>/richiesta/<int:utente_target>/<azione>", methods=["POST"])
+@login_richiesto
+def gestisci_richiesta(tavolo_id, utente_target, azione):
+    if azione not in ("approva", "rifiuta"):
+        abort(400)
+    conn = get_db()
+    t = esegui(conn, "SELECT tema, organizzatore_id, posti_totali, min_partecipanti FROM tavoli WHERE id = ?",
+               (tavolo_id,)).fetchone()
+    if not t:
+        conn.close()
+        abort(404)
+    if t["organizzatore_id"] != session["utente_id"]:
+        conn.close()
+        abort(403)
+    r = esegui(conn, "SELECT id FROM richieste WHERE tavolo_id = ? AND utente_id = ? AND stato = ?",
+               (tavolo_id, utente_target, "attesa")).fetchone()
+    if not r:
+        conn.close()
+        flash("Richiesta non trovata.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    link = url_for("dettaglio_tavolo", tavolo_id=tavolo_id)
+    if azione == "approva":
+        n = esegui(conn, "SELECT COUNT(*) AS n FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,)).fetchone()["n"]
+        if n >= t["posti_totali"]:
+            conn.close()
+            flash("Il tavolo è al completo: non puoi accettare altre richieste.")
+            return redirect(link)
+        esegui(conn, "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
+               (tavolo_id, utente_target, datetime.now().isoformat()))
+        esegui(conn, "DELETE FROM richieste WHERE id = ?", (r["id"],))
+        notifica(conn, utente_target, "richiesta_ok", t["tema"], "La tua richiesta è stata accettata: ora partecipi!",
+                 link, session["utente_id"])
+        if t["min_partecipanti"] and n + 1 == t["min_partecipanti"]:
+            for x in esegui(conn, "SELECT utente_id FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,)).fetchall():
+                notifica(conn, x["utente_id"], "confermato", t["tema"],
+                         "Il tavolo è confermato: è stato raggiunto il numero minimo di partecipanti", link)
+        flash("Richiesta accettata.")
+    else:
+        esegui(conn, "DELETE FROM richieste WHERE id = ?", (r["id"],))
+        notifica(conn, utente_target, "richiesta_no", t["tema"], "La tua richiesta non è stata accettata",
+                 link, session["utente_id"])
+        flash("Richiesta rifiutata.")
+    conn.commit()
+    conn.close()
+    return redirect(link)
+
+
+@app.route("/tavolo/<int:tavolo_id>/ritira-richiesta", methods=["POST"])
+@login_richiesto
+def ritira_richiesta(tavolo_id):
+    conn = get_db()
+    esegui(conn, "DELETE FROM richieste WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, session["utente_id"]))
+    conn.commit()
+    conn.close()
+    flash("Richiesta ritirata.")
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
 @app.route("/miei-tavoli")
@@ -1401,6 +1529,7 @@ def dettaglio_tavolo(tavolo_id):
         stat_criteri=stat_criteri,
         prezzo_top=prezzo_top,
         **stato_preferiti(tavolo_id, tavolo["locale_id"]),
+        **dati_richieste(tavolo_id),
     )
 
 
@@ -1802,6 +1931,8 @@ def nuovo_tavolo():
         esegui(conn,
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
+        if request.form.get("su_richiesta") == "1":
+            esegui(conn, "UPDATE tavoli SET su_richiesta = 1 WHERE id = ?", (tavolo_id,))
         if request.form.get("esclusivo") == "1" and e_premium(conn, utente_id):
             esegui(conn, "UPDATE tavoli SET esclusivo = 1 WHERE id = ?", (tavolo_id,))
         try:
@@ -1876,6 +2007,35 @@ def iscriviti(tavolo_id):
         flash("Questo tavolo è riservato a un'altra fascia d'età.")
         return redirect(request.referrer or url_for("home"))
 
+    extra = esegui(conn, "SELECT su_richiesta, organizzatore_id, tema FROM tavoli WHERE id = ?",
+                   (tavolo_id,)).fetchone()
+    uid_r = session["utente_id"]
+    if e_iscritto(conn, tavolo_id, uid_r):
+        conn.close()
+        return redirect(request.referrer or url_for("home"))
+    gia_r = esegui(conn, "SELECT stato FROM richieste WHERE tavolo_id = ? AND utente_id = ?",
+                   (tavolo_id, uid_r)).fetchone()
+    if gia_r:
+        conn.close()
+        flash("Hai già una richiesta per questo tavolo.")
+        return redirect(request.referrer or url_for("home"))
+    pieno = tavolo["iscritti"] >= tavolo["posti_totali"]
+    if pieno or extra["su_richiesta"]:
+        stato_r = "coda" if pieno else "attesa"
+        try:
+            esegui(conn, "INSERT INTO richieste (tavolo_id, utente_id, stato, creato_il) VALUES (?, ?, ?, ?)",
+                   (tavolo_id, uid_r, stato_r, datetime.now().isoformat()))
+            if stato_r == "attesa":
+                notifica(conn, extra["organizzatore_id"], "richiesta", extra["tema"],
+                         f"{session.get('utente_nome')} chiede di partecipare al tuo tavolo",
+                         url_for("dettaglio_tavolo", tavolo_id=tavolo_id), uid_r)
+            conn.commit()
+            flash("Richiesta inviata: l'organizzatore la valuterà." if stato_r == "attesa"
+                  else "Il tavolo è completo: sei in lista d'attesa.")
+        except IntegrityError:
+            conn.rollback()
+        conn.close()
+        return redirect(request.referrer or url_for("home"))
     if tavolo["iscritti"] < tavolo["posti_totali"]:
         try:
             esegui(conn,
@@ -1923,6 +2083,7 @@ def annulla_iscrizione(tavolo_id):
         notifica(conn, tavolo["organizzatore_id"], "annullo", riga_t["tema"],
                  f"{session.get('utente_nome')} ha annullato la partecipazione",
                  url_for("dettaglio_tavolo", tavolo_id=tavolo_id), session["utente_id"])
+        promuovi_coda(conn, tavolo_id)
         conn.commit()
         flash("Iscrizione annullata.")
     conn.close()
@@ -1943,6 +2104,7 @@ def elimina_tavolo(tavolo_id):
         conn.close()
         abort(403)
 
+    esegui(conn, "DELETE FROM richieste WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM preferiti WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM messaggi WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM valutazioni_criteri WHERE tavolo_id = ?", (tavolo_id,))
