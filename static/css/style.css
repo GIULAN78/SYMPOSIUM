@@ -862,3 +862,36 @@ details.segnala form {
     gap: 0.5rem;
     margin-top: 0.5rem;
 }
+
+.badge-tabler {
+    background: #f28c28;
+    color: #fff;
+}
+
+.badge-tablerplus {
+    background: #1e6fe0;
+    color: #fff;
+}
+
+.badge-manager {
+    background: #7b2fd0;
+    color: #fff;
+}
+
+.badge-punti {
+    background: var(--oro);
+    color: var(--notte);
+}
+
+.riga-badge {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.6rem 0;
+}
+
+.riga-badge .badge {
+    margin-left: 0;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.7rem;
+}

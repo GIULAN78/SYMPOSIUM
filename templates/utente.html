@@ -35,6 +35,18 @@
                 </div>
             </div>
 
+            <div class="riga-badge">
+                {% for b in badge %}
+                <span class="badge badge-{{ b.classe }}">{{ b.icona }} {{ b.nome }}</span>
+                {% endfor %}
+                <span class="badge badge-punti">🎁 {{ punti }} punti</span>
+            </div>
+            {% if mio and prossimi_badge %}
+            <ul class="lista-stat">
+                {% for x in prossimi_badge %}<li>{{ x }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+
             <div class="statistiche">
                 <div><strong>{{ organizzati }}</strong><span>organizzatore</span></div>
                 <div><strong>{{ assenze }}</strong><span>assenze</span></div>

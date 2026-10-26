@@ -593,6 +593,51 @@ def stato_relazione(altro_id):
 MOTIVI_SEGNALAZIONE = ("Comportamento inappropriato", "Profilo falso", "Spam", "Altro")
 
 
+def info_badge(utente_id):
+    conn = get_db()
+    righe = esegui(conn, """
+        SELECT t.data_ora, t.organizzatore_id
+        FROM iscrizioni i
+        JOIN tavoli t ON t.id = i.tavolo_id
+        WHERE i.utente_id = ?
+          AND NOT EXISTS (SELECT 1 FROM assenze a WHERE a.tavolo_id = t.id AND a.utente_id = ?)
+    """, (utente_id, utente_id)).fetchall()
+    n_val = esegui(conn, "SELECT COUNT(*) AS n FROM valutazioni_locale WHERE utente_id = ?",
+                   (utente_id,)).fetchone()["n"]
+    conn.close()
+
+    chiuse = [r for r in righe if e_concluso(r["data_ora"])]
+    serate = len(chiuse)
+    organizzate = sum(1 for r in chiuse if r["organizzatore_id"] == utente_id)
+    partecipate = serate - organizzate
+    punti = partecipate * 10 + organizzate * 25 + int(n_val) * 5
+
+    badge = []
+    if serate >= 5:
+        badge.append({"nome": "Tabler+", "classe": "tablerplus", "icona": "🔵"})
+    elif serate >= 1:
+        badge.append({"nome": "Tabler", "classe": "tabler", "icona": "🟠"})
+    if organizzate >= 3:
+        badge.append({"nome": "Event Manager", "classe": "manager", "icona": "🟣"})
+
+    prossimi = []
+    if serate < 1:
+        prossimi.append("Partecipa alla tua prima serata per ottenere il badge Tabler")
+    elif serate < 5:
+        prossimi.append(f"Ancora {5 - serate} serate per il badge Tabler+")
+    if organizzate < 3:
+        prossimi.append(f"Ancora {3 - organizzate} serate organizzate per il badge Event Manager")
+
+    principale = badge[-1] if badge else None
+    return {
+        "punti": punti,
+        "serate": serate,
+        "badge": badge,
+        "badge_principale": principale,
+        "prossimi_badge": prossimi,
+    }
+
+
 def utente_per_id(conn, utente_id):
     if not utente_id:
         return None
@@ -1086,6 +1131,7 @@ def dettaglio_tavolo(tavolo_id):
         p["in_comune"] = len(miei & set_interessi(p["interessi"]))
         p["eta"] = eta_da(p["data_nascita"])
         p["assente"] = p["id"] in assenti
+        p["badge"] = info_badge(p["id"])["badge_principale"]
         partecipanti.append(p)
 
     eta_list = [p["eta"] for p in partecipanti if p["eta"] is not None]
@@ -1434,6 +1480,7 @@ def profilo_utente(utente_id):
         compat_label=compat_label,
         mio=(session.get("utente_id") == utente_id),
         **stato_relazione(utente_id),
+        **info_badge(utente_id),
     )
 
 

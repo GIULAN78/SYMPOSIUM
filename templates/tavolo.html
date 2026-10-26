@@ -110,7 +110,7 @@
             <div class="partecipante riga-partecipante">
                 {{ avatar(p.foto_url, p.nome) }}
                 <div class="info-part">
-                    <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=p.id) }}"><strong>{{ p.nome }}</strong></a>{% if p.id == tavolo.organizzatore_id %} <span class="badge">organizzatore</span>{% endif %}{% if p.assente %} <span class="badge badge-ass">assente</span>{% endif %}
+                    <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=p.id) }}"><strong>{{ p.nome }}</strong></a>{% if p.id == tavolo.organizzatore_id %} <span class="badge">organizzatore</span>{% endif %}{% if p.assente %} <span class="badge badge-ass">assente</span>{% endif %}{% if p.badge %} <span class="badge badge-{{ p.badge.classe }}">{{ p.badge.nome }}</span>{% endif %}
                     <p class="interessi">{% if p.eta %}{{ p.eta }} anni{% endif %}{% if p.citta %}, {{ p.citta }}{% endif %}{% if utente_nome and p.id != utente_id %} · {{ p.in_comune }} interessi in comune{% endif %}</p>
                 </div>
                 {% if sono_organizzatore and concluso and p.id != tavolo.organizzatore_id %}
