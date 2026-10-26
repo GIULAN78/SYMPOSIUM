@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if pagina == 'privacy' %}Privacy{% elif pagina == 'termini' %}Termini{% else %}FAQ{% endif %} - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+
+    <main>
+        <div class="card-tavolo">
+            <div class="corpo-card testo-legale">
+
+            {% if pagina == 'privacy' %}
+                <h2>Informativa sulla privacy</h2>
+                <p class="nota">Bozza in revisione. Ultimo aggiornamento: ottobre 2026.</p>
+
+                <h3>Chi tratta i dati</h3>
+                <p>Il titolare del trattamento è il gestore di Symposium.{% if contatto %} Contatto: {{ contatto }}.{% endif %}</p>
+
+                <h3>Quali dati raccogliamo</h3>
+                <ul>
+                    <li>Dati dell'account: nome, email, password (conservata solo in forma cifrata), data di nascita, città.</li>
+                    <li>Dati facoltativi del profilo: foto, professione, formazione, descrizione, interessi.</li>
+                    <li>Attività sul servizio: tavoli creati, iscrizioni, messaggi della chat dei tavoli, valutazioni, presenze, amici, utenti bloccati, segnalazioni, notifiche.</li>
+                </ul>
+
+                <h3>A cosa servono</h3>
+                <p>Per far funzionare il servizio: creare e trovare tavoli, mostrare il profilo agli altri partecipanti, inviare notifiche, calcolare affidabilità e punti, tutelare gli utenti. La data di nascita serve a verificare la maggiore età e a rispettare le fasce d'età dei tavoli; il profilo mostra l'età, non la data.</p>
+
+                <h3>Chi vede cosa</h3>
+                <p>Nome, età, città, foto, interessi, badge e statistiche del profilo sono visibili agli altri utenti registrati. L'email non è mai mostrata agli altri utenti. I messaggi della chat sono visibili solo ai partecipanti del tavolo.</p>
+
+                <h3>Servizi esterni usati</h3>
+                <ul>
+                    <li>Render (hosting e database, server nell'Unione Europea).</li>
+                    <li>Cloudflare R2 (archiviazione delle foto).</li>
+                    <li>OpenStreetMap (mappa e ricerca dei locali): per mostrare un tavolo sulla mappa vengono inviati il nome del locale e la città, mai dati personali.</li>
+                </ul>
+
+                <h3>Cookie</h3>
+                <p>Usiamo solo un cookie tecnico di sessione, necessario per restare collegati. Non usiamo cookie pubblicitari né di profilazione.</p>
+
+                <h3>Per quanto tempo</h3>
+                <p>Fino alla cancellazione dell'account. Dalle Impostazioni puoi eliminare il tuo account in qualsiasi momento: i dati vengono cancellati.</p>
+
+                <h3>I tuoi diritti</h3>
+                <p>Puoi chiedere accesso, rettifica e cancellazione dei dati, e opporti al trattamento. Puoi modificare il profilo e cancellare l'account direttamente dalle Impostazioni. Hai diritto di presentare reclamo al Garante per la protezione dei dati personali.</p>
+
+            {% elif pagina == 'termini' %}
+                <h2>Termini di utilizzo</h2>
+                <p class="nota">Bozza in revisione. Ultimo aggiornamento: ottobre 2026.</p>
+
+                <h3>Cos'è Symposium</h3>
+                <p>Symposium è una piattaforma che permette di organizzare e partecipare a tavoli in locali pubblici per conoscere persone con interessi in comune. Symposium non è parte degli incontri e non gestisce i locali.</p>
+
+                <h3>Chi può usarlo</h3>
+                <p>Solo persone maggiorenni. Ogni persona può avere un solo account e deve fornire dati veritieri.</p>
+
+                <h3>Comportamento</h3>
+                <ul>
+                    <li>Rispetta gli altri partecipanti: niente molestie, insulti, discriminazioni o contenuti illegali.</li>
+                    <li>Non usare il servizio per spam, pubblicità non richiesta o per raccogliere dati altrui.</li>
+                    <li>Se non puoi partecipare, annulla l'iscrizione in tempo: le assenze incidono sull'affidabilità.</li>
+                    <li>Le segnalazioni false o ripetute possono portare alla sospensione dell'account.</li>
+                </ul>
+
+                <h3>Incontri dal vivo</h3>
+                <p>Incontrare persone sconosciute richiede prudenza: scegli sempre locali pubblici, avvisa qualcuno di fiducia e non condividere dati sensibili. Ogni partecipante è responsabile delle proprie scelte. Symposium non è responsabile di ciò che accade durante gli incontri, né di prezzi, qualità e servizio dei locali.</p>
+
+                <h3>Contenuti</h3>
+                <p>Sei responsabile di ciò che pubblichi (foto, testi, messaggi). Possiamo rimuovere contenuti o sospendere account che violano questi termini.</p>
+
+                <h3>Premium</h3>
+                <p>Le funzioni Premium possono essere gratuite o a pagamento. Se diventano a pagamento, ne daremo comunicazione chiara prima di qualsiasi addebito.</p>
+
+                <h3>Modifiche e contatti</h3>
+                <p>Possiamo aggiornare questi termini; le modifiche importanti saranno comunicate nell'app.{% if contatto %} Per informazioni: {{ contatto }}.{% endif %}</p>
+
+            {% else %}
+                <h2>Domande frequenti</h2>
+
+                <h3>Come partecipo a un tavolo?</h3>
+                <p>Dalla home o dalla mappa apri un tavolo e premi <strong>Partecipa</strong>. Puoi annullare finché la serata non è conclusa.</p>
+
+                <h3>Cosa significa «Confermato»?</h3>
+                <p>Il tavolo ha raggiunto il numero minimo di partecipanti deciso dall'organizzatore.</p>
+
+                <h3>Perché non posso iscrivermi a un tavolo?</h3>
+                <p>Può essere completo, riservato a un'altra fascia d'età, riservato ai Premium, oppure creato da un utente con cui c'è un blocco.</p>
+
+                <h3>Come funzionano affidabilità e punti?</h3>
+                <p>Ogni serata a cui partecipi ti dà punti e fa salire i badge. L'organizzatore segna le assenze dopo la serata: troppe assenze abbassano l'affidabilità.</p>
+
+                <h3>Come valuto una serata?</h3>
+                <p>Due ore dopo l'inizio compare un banner: rispondi su presenti, compatibilità, locale e fascia di prezzo. Puoi saltare ciò che non vuoi valutare.</p>
+
+                <h3>Come blocco o segnalo qualcuno?</h3>
+                <p>Dal profilo dell'utente trovi i pulsanti <strong>Blocca</strong> e <strong>Segnala</strong>.</p>
+
+                <h3>Come elimino il mio account?</h3>
+                <p>Da <strong>Impostazioni → Elimina account</strong>, con la tua password.</p>
+            {% endif %}
+
+            </div>
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

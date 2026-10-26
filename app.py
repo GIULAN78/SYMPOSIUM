@@ -1156,6 +1156,125 @@ def admin_utente_premium(utente_target):
     return redirect(url_for("admin"))
 
 
+def cancella_tavoli(conn, ids):
+    for tid in ids:
+        for tab in ("messaggi", "valutazioni_criteri", "compatibilita", "presenze",
+                    "valutazioni_locale", "assenze", "preferiti", "iscrizioni"):
+            esegui(conn, f"DELETE FROM {tab} WHERE tavolo_id = ?", (tid,))
+        esegui(conn, "DELETE FROM tavoli WHERE id = ?", (tid,))
+
+
+@app.after_request
+def piede(risposta):
+    try:
+        if (
+            risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint in (None, "static", "service_worker")
+        ):
+            return risposta
+        html = (
+            '<footer class="piede">'
+            '<a href="/privacy">Privacy</a> · <a href="/termini">Termini</a> · <a href="/faq">FAQ</a>'
+            "</footer>"
+        )
+        testo = risposta.get_data(as_text=True)
+        if "</body>" in testo:
+            risposta.set_data(testo.replace("</body>", html + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
+
+
+@app.route("/impostazioni")
+@login_richiesto
+def impostazioni():
+    conn = get_db()
+    u = utente_per_id(conn, session["utente_id"])
+    conn.close()
+    return render_template("impostazioni.html", u=u)
+
+
+@app.route("/impostazioni/password", methods=["POST"])
+@login_richiesto
+def cambia_password():
+    attuale = request.form.get("attuale", "")
+    nuova = request.form.get("nuova", "")
+    conn = get_db()
+    u = utente_per_id(conn, session["utente_id"])
+    if not u or not u["password_hash"] or not check_password_hash(u["password_hash"], attuale):
+        conn.close()
+        flash("La password attuale non è corretta.")
+        return redirect(url_for("impostazioni"))
+    if len(nuova) < 6:
+        conn.close()
+        flash("La nuova password deve avere almeno 6 caratteri.")
+        return redirect(url_for("impostazioni"))
+    esegui(conn, "UPDATE utenti SET password_hash = ? WHERE id = ?",
+           (generate_password_hash(nuova), session["utente_id"]))
+    conn.commit()
+    conn.close()
+    flash("Password aggiornata.")
+    return redirect(url_for("impostazioni"))
+
+
+@app.route("/impostazioni/elimina", methods=["POST"])
+@login_richiesto
+def elimina_account():
+    uid = session["utente_id"]
+    conn = get_db()
+    u = utente_per_id(conn, uid)
+    if not u or not u["password_hash"] or not check_password_hash(u["password_hash"], request.form.get("password", "")):
+        conn.close()
+        flash("Password non corretta: l'account non è stato eliminato.")
+        return redirect(url_for("impostazioni"))
+
+    ids = [r["id"] for r in esegui(conn, "SELECT id FROM tavoli WHERE organizzatore_id = ?", (uid,)).fetchall()]
+    cancella_tavoli(conn, ids)
+
+    for sql in (
+        "DELETE FROM messaggi WHERE utente_id = ?",
+        "DELETE FROM valutazioni_criteri WHERE utente_id = ?",
+        "DELETE FROM valutazioni_locale WHERE utente_id = ?",
+        "DELETE FROM presenze WHERE segnalatore_id = ? OR utente_id = ?",
+        "DELETE FROM compatibilita WHERE da_utente = ? OR a_utente = ?",
+        "DELETE FROM assenze WHERE utente_id = ?",
+        "DELETE FROM preferiti WHERE utente_id = ?",
+        "DELETE FROM locali_seguiti WHERE utente_id = ?",
+        "DELETE FROM amici WHERE utente_id = ? OR amico_id = ?",
+        "DELETE FROM bloccati WHERE utente_id = ? OR bloccato_id = ?",
+        "DELETE FROM segnalazioni WHERE da_utente = ? OR utente_id = ?",
+        "DELETE FROM notifiche WHERE utente_id = ? OR da_utente = ?",
+        "DELETE FROM iscrizioni WHERE utente_id = ?",
+        "DELETE FROM utenti WHERE id = ?",
+    ):
+        esegui(conn, sql, (uid,) * sql.count("?"))
+    conn.commit()
+    conn.close()
+    session.clear()
+    flash("Il tuo account è stato eliminato.")
+    return redirect(url_for("home"))
+
+
+def pagina_info(nome):
+    return render_template("info.html", pagina=nome, contatto=os.environ.get("CONTATTO_EMAIL", "").strip())
+
+
+@app.route("/privacy")
+def privacy():
+    return pagina_info("privacy")
+
+
+@app.route("/termini")
+def termini():
+    return pagina_info("termini")
+
+
+@app.route("/faq")
+def faq():
+    return pagina_info("faq")
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
