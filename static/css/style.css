@@ -1065,3 +1065,21 @@ header::after {
 .riga-partecipante {
     flex-wrap: wrap;
 }
+
+.codice-grande {
+    font-family: monospace;
+    font-size: 1.6rem;
+    font-weight: bold;
+    letter-spacing: 2px;
+    background: #fffaf0;
+    border: 2px dashed var(--oro);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    display: inline-block;
+}
+
+.saldo-grande {
+    font-size: 2.2rem;
+    font-weight: bold;
+    margin: 0.2rem 0 0.8rem;
+}

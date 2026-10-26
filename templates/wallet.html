@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallet ALX - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <h3 class="titolo-sezione">💰 Wallet ALX</h3>
+
+        {% if not configurato %}
+        <div class="card-tavolo"><div class="corpo-card">
+            <p>Il collegamento con Alexandria non è ancora configurato.</p>
+        </div></div>
+
+        {% elif not collegato %}
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>Collega il tuo account Alexandria</h2>
+            <p>Usi gli stessi token ALX di Alexandria: stesso saldo, stesso wallet. Symposium non vede la tua password.</p>
+
+            {% if codice %}
+            <p class="etichetta">1. Apri il bot Telegram di Alexandria</p>
+            <p><a href="https://t.me/alexandriadigitallibrarybot" target="_blank" rel="noopener">t.me/alexandriadigitallibrarybot</a></p>
+            <p class="etichetta">2. Scrivi questo messaggio</p>
+            <p class="codice-grande">/login {{ codice }}</p>
+            <p id="stato-collegamento" class="nota">In attesa della conferma da Telegram...</p>
+            <form method="POST" action="{{ url_for('wallet_collega') }}">
+                <button type="submit" class="btn-piccolo">Genera un nuovo codice</button>
+            </form>
+            {% else %}
+            <form method="POST" action="{{ url_for('wallet_collega') }}">
+                <button type="submit" class="btn-nuovo">🔗 Collega Alexandria</button>
+            </form>
+            {% endif %}
+        </div></div>
+
+        {% else %}
+        <div class="card-tavolo"><div class="corpo-card">
+            <p class="etichetta">Il tuo saldo</p>
+            <p class="saldo-grande">{% if illimitato %}∞{% elif saldo is not none %}{{ saldo }}{% else %}…{% endif %} ALX</p>
+            {% if errore %}<p class="nota">{{ errore }}</p>{% endif %}
+            <form method="POST" action="{{ url_for('wallet_scollega') }}"
+                  onsubmit="return confirm('Scollegare il tuo account Alexandria da Symposium?');">
+                <button type="submit" class="btn-piccolo">Scollega Alexandria</button>
+            </form>
+        </div></div>
+
+        <h3 class="titolo-sezione">Acquista ALX</h3>
+        {% if not pacchetti %}
+            <p class="vuoto">Gli acquisti non sono al momento disponibili.</p>
+        {% endif %}
+        <div class="griglia-stat">
+            {% for chiave, p in pacchetti.items() %}
+            <form class="stat-card" method="POST" action="{{ url_for('wallet_acquista') }}">
+                <input type="hidden" name="pacchetto" value="{{ chiave }}">
+                <strong>{{ p.alx }}</strong>
+                <span>ALX</span>
+                <p>{{ '%.2f'|format(p.prezzo_centesimi / 100)|replace('.', ',') }} €</p>
+                <button type="submit" class="btn-iscriviti">Acquista</button>
+            </form>
+            {% endfor %}
+        </div>
+
+        <h3 class="titolo-sezione">Ultimi movimenti</h3>
+        {% if not movimenti %}<p class="vuoto">Nessun movimento.</p>{% endif %}
+        <div class="lista-partecipanti">
+            {% for m in movimenti %}
+            <div class="partecipante riga-partecipante">
+                <div class="info-part">
+                    <strong>{{ 'Inviati' if m.tipo == 'inviato' else 'Ricevuti' }}: {{ m.importo }} ALX</strong>
+                    <p class="interessi">{{ m.data }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </main>
+
+{% if configurato and not collegato and codice %}
+<script>
+(function () {
+    var el = document.getElementById("stato-collegamento");
+    var tentativi = 0;
+    function controlla() {
+        tentativi += 1;
+        fetch("{{ url_for('wallet_collega_stato') }}", { credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.stato === "ok") { window.location.reload(); return; }
+                if (d.stato === "occupato") {
+                    el.textContent = "Questo account Alexandria è già collegato a un altro utente di Symposium.";
+                    return;
+                }
+                if (tentativi < 200) { setTimeout(controlla, 3000); }
+                else { el.textContent = "Codice scaduto: generane uno nuovo."; }
+            })
+            .catch(function () { setTimeout(controlla, 5000); });
+    }
+    controlla();
+})();
+</script>
+{% endif %}
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

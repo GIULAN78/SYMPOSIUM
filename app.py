@@ -369,6 +369,7 @@ def init_db():
     """)
 
     aggiungi_colonna(conn, "utenti", "sospeso", "INTEGER DEFAULT 0")
+    aggiungi_colonna(conn, "utenti", "id_alexandria", "BIGINT")
     aggiungi_colonna(conn, "segnalazioni", "gestita", "INTEGER DEFAULT 0")
 
     conn.commit()
@@ -2008,6 +2009,133 @@ def admin_sso():
     session["utente_id"] = u["id"]
     session["utente_nome"] = u["nome"]
     return redirect(url_for("admin"))
+
+
+def api_alexandria(metodo, percorso, corpo=None, con_chiave=False):
+    import json
+    import urllib.error
+    import urllib.request
+    base = os.environ.get("ALEXANDRIA_API_URL", "").strip().rstrip("/")
+    if not base:
+        return None, None
+    intestazioni = {"Content-Type": "application/json"}
+    if con_chiave:
+        chiave = os.environ.get("ALEXANDRIA_API_KEY", "").strip()
+        if not chiave:
+            return None, None
+        intestazioni["X-Symposium-Key"] = chiave
+    dati = json.dumps(corpo).encode() if corpo is not None else None
+    richiesta = urllib.request.Request(base + percorso, data=dati, headers=intestazioni, method=metodo)
+    try:
+        with urllib.request.urlopen(richiesta, timeout=25) as r:
+            return r.status, json.loads(r.read().decode() or "null")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode())
+        except Exception:
+            return e.code, None
+    except Exception:
+        return None, None
+
+
+@app.route("/wallet")
+@login_richiesto
+def wallet():
+    if request.args.get("pagamento") == "ok":
+        flash("Pagamento ricevuto: gli ALX arrivano nel wallet entro un paio di minuti.")
+    elif request.args.get("pagamento") == "annullato":
+        flash("Pagamento annullato: nessun addebito.")
+    conn = get_db()
+    u = utente_per_id(conn, session["utente_id"])
+    conn.close()
+    id_al = u["id_alexandria"]
+    configurato = bool(os.environ.get("ALEXANDRIA_API_URL", "").strip() and os.environ.get("ALEXANDRIA_API_KEY", "").strip())
+    saldo, illimitato, errore = None, False, None
+    movimenti, pacchetti = [], {}
+    if id_al and configurato:
+        st, d = api_alexandria("GET", f"/symposium/saldo/{id_al}", con_chiave=True)
+        if st == 200 and d:
+            saldo = d.get("saldo_alx")
+            illimitato = bool(d.get("illimitato"))
+        else:
+            errore = "Non riesco a leggere il saldo da Alexandria: riprova tra qualche secondo."
+        st2, m = api_alexandria("GET", f"/wallet/{id_al}/transazioni")
+        if st2 == 200 and isinstance(m, list):
+            movimenti = m[:10]
+        st3, pk = api_alexandria("GET", "/premium/pacchetti")
+        if st3 == 200 and pk and pk.get("attivo"):
+            pacchetti = pk.get("pacchetti", {})
+    return render_template("wallet.html", collegato=bool(id_al), configurato=configurato,
+                           saldo=saldo, illimitato=illimitato, errore=errore,
+                           movimenti=movimenti, pacchetti=pacchetti,
+                           codice=session.get("codice_alexandria"))
+
+
+@app.route("/wallet/collega", methods=["POST"])
+@login_richiesto
+def wallet_collega():
+    st, d = api_alexandria("POST", "/auth/genera-codice")
+    if st == 200 and d and d.get("codice"):
+        session["codice_alexandria"] = d["codice"]
+    else:
+        flash("Non riesco a contattare Alexandria: riprova tra qualche secondo.")
+    return redirect(url_for("wallet"))
+
+
+@app.route("/wallet/collega/stato")
+@login_richiesto
+def wallet_collega_stato():
+    codice = session.get("codice_alexandria")
+    if not codice:
+        return jsonify({"stato": "nessuno"})
+    st, d = api_alexandria("GET", f"/auth/stato-codice/{codice}")
+    if st != 200 or not d:
+        return jsonify({"stato": "errore"})
+    if not d.get("confermato") or not d.get("id_telegram"):
+        return jsonify({"stato": "attesa"})
+    id_tg = int(d["id_telegram"])
+    conn = get_db()
+    altro = esegui(conn, "SELECT id FROM utenti WHERE id_alexandria = ? AND id != ?",
+                   (id_tg, session["utente_id"])).fetchone()
+    if altro:
+        conn.close()
+        session.pop("codice_alexandria", None)
+        return jsonify({"stato": "occupato"})
+    esegui(conn, "UPDATE utenti SET id_alexandria = ? WHERE id = ?", (id_tg, session["utente_id"]))
+    conn.commit()
+    conn.close()
+    session.pop("codice_alexandria", None)
+    return jsonify({"stato": "ok"})
+
+
+@app.route("/wallet/scollega", methods=["POST"])
+@login_richiesto
+def wallet_scollega():
+    conn = get_db()
+    esegui(conn, "UPDATE utenti SET id_alexandria = NULL WHERE id = ?", (session["utente_id"],))
+    conn.commit()
+    conn.close()
+    session.pop("codice_alexandria", None)
+    flash("Account Alexandria scollegato.")
+    return redirect(url_for("wallet"))
+
+
+@app.route("/wallet/acquista", methods=["POST"])
+@login_richiesto
+def wallet_acquista():
+    conn = get_db()
+    u = utente_per_id(conn, session["utente_id"])
+    conn.close()
+    if not u["id_alexandria"]:
+        flash("Collega prima il tuo account Alexandria.")
+        return redirect(url_for("wallet"))
+    pacchetto = request.form.get("pacchetto", "")
+    st, d = api_alexandria("POST", "/symposium/acquista-alx",
+                           {"id_telegram": int(u["id_alexandria"]), "pacchetto": pacchetto}, con_chiave=True)
+    if st == 200 and d and d.get("ok") and d.get("url_pagamento"):
+        return redirect(d["url_pagamento"])
+    flash((d or {}).get("messaggio") or "Acquisto non disponibile al momento: riprova più tardi.")
+    return redirect(url_for("wallet"))
 
 
 @app.route("/miei-tavoli")
