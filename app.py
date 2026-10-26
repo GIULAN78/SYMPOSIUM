@@ -1722,6 +1722,25 @@ def immagini_sito():
     return render_template("immagini.html", slot=SLOT_IMMAGINI, valori=valori)
 
 
+@app.after_request
+def caricamento_overlay(risposta):
+    try:
+        if (
+            risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint in (None, "static", "service_worker")
+        ):
+            return risposta
+        if not os.path.exists(os.path.join(app.static_folder, "img", "coppa.png")):
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        if "</body>" in testo:
+            risposta.set_data(testo.replace("</body>", render_template("_caricamento.html") + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():

@@ -1,0 +1,41 @@
+<style>
+#carica{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(13,94,175,.45)}
+#carica.on{display:flex}
+.carica-disco{width:92px;height:92px;border-radius:50%;background:#eef6ff;border:3px solid #ffe14d;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.35);perspective:300px}
+.carica-disco img{width:54px;height:54px;object-fit:contain;animation:coppa-gira 1.4s linear infinite}
+@keyframes coppa-gira{from{transform:rotateY(0deg)}to{transform:rotateY(360deg)}}
+</style>
+<div id="carica" aria-hidden="true"><div class="carica-disco"><img src="/static/img/coppa.png" alt=""></div></div>
+<script>
+(function () {
+    var el = document.getElementById("carica");
+    var t = null;
+    var stop = null;
+    function mostra() {
+        clearTimeout(t);
+        t = setTimeout(function () {
+            el.classList.add("on");
+            clearTimeout(stop);
+            stop = setTimeout(nascondi, 15000);
+        }, 150);
+    }
+    function nascondi() {
+        clearTimeout(t);
+        clearTimeout(stop);
+        el.classList.remove("on");
+    }
+    window.addEventListener("pageshow", nascondi);
+    document.addEventListener("click", function (e) {
+        if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) { return; }
+        var a = e.target.closest && e.target.closest("a");
+        if (!a || !a.href || a.target === "_blank" || a.hasAttribute("download")) { return; }
+        var u = new URL(a.href, location.href);
+        if (u.origin !== location.origin) { return; }
+        if (u.pathname === location.pathname && u.search === location.search && u.hash) { return; }
+        mostra();
+    });
+    document.addEventListener("submit", function (e) {
+        setTimeout(function () { if (!e.defaultPrevented) { mostra(); } }, 0);
+    });
+})();
+</script>
