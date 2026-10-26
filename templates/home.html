@@ -27,6 +27,7 @@
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
 
+        <div class="toggle-vista"><a class="attivo" href="/">☰ Elenco</a><a href="/mappa">🗺️ Mappa</a><a href="/locali">🍽️ Locali</a></div>
         <form class="form-ricerca" method="GET" action="{{ url_for('home') }}">
             <input type="text" name="q" value="{{ q }}" placeholder="Cerca per tema, locale, obiettivo...">
             <input type="text" name="citta" value="{{ citta }}" placeholder="Città">

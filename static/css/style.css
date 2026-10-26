@@ -784,3 +784,45 @@ main {
     margin: 0.15rem 0;
     font-size: 0.9rem;
 }
+
+.toggle-vista {
+    display: inline-flex;
+    margin-bottom: 1rem;
+    border: 1px solid var(--oro);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.toggle-vista a {
+    padding: 0.4rem 1.2rem;
+    color: var(--oro-chiaro);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.toggle-vista a.attivo {
+    background: var(--oro);
+    color: var(--notte);
+    font-weight: bold;
+}
+
+.mappa-box {
+    height: 60vh;
+    border: 2px solid var(--oro);
+    border-radius: 10px;
+}
+
+.nota-mappa {
+    color: var(--avorio);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.select-tipo {
+    flex: 1 1 180px;
+    padding: 0.55rem;
+    border: 1px solid var(--oro);
+    background: var(--avorio);
+    border-radius: 6px;
+    font-size: 1rem;
+}

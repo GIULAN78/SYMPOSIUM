@@ -30,10 +30,13 @@
             <textarea id="descrizione" name="descrizione" rows="4" placeholder="Di cosa si parlerà, che tipo di serata, chi cerchi al tavolo..."></textarea>
 
             <label for="locale">Locale</label>
-            <input type="text" id="locale" name="locale" placeholder="Nome del ristorante o locale" required>
+            <input type="text" id="locale" name="locale" value="{{ request.args.get('locale', '') }}" placeholder="Nome del ristorante o locale" required>
+            <input type="hidden" name="lat" value="{{ request.args.get('lat', '') }}">
+            <input type="hidden" name="lng" value="{{ request.args.get('lng', '') }}">
+            <a class="link-dettaglio" href="/locali">🔎 Cerca nei locali d'Italia</a>
 
             <label for="citta">Città</label>
-            <input type="text" id="citta" name="citta" placeholder="Es. Novara" required>
+            <input type="text" id="citta" name="citta" value="{{ request.args.get('citta', '') }}" placeholder="Es. Novara" required>
 
             <label for="data_ora">Data e ora</label>
             <input type="datetime-local" id="data_ora" name="data_ora" required>

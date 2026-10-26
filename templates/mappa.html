@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mappa - Symposium</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <p class="sottotitolo">Trova il tuo tavolo, condividi gli interessi</p>
+        {% if utente_nome %}
+            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('profilo_utente', utente_id=utente_id) }}">Profilo</a> · <a href="{{ url_for('miei_tavoli') }}">I miei tavoli</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
+            <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo') }}">+ Crea un tavolo</a>
+        {% else %}
+            <p class="nav-utente"><a href="{{ url_for('accedi') }}">Accedi</a> · <a href="{{ url_for('registrati') }}">Registrati</a></p>
+        {% endif %}
+    </header>
+
+    <main>
+        <div class="toggle-vista"><a href="/">☰ Elenco</a><a class="attivo" href="/mappa">🗺️ Mappa</a><a href="/locali">🍽️ Locali</a></div>
+
+        <form class="form-ricerca" method="GET" action="{{ url_for('mappa') }}">
+            <input type="text" name="q" value="{{ q }}" placeholder="Cerca per tema, locale, obiettivo...">
+            <input type="text" name="citta" value="{{ citta }}" placeholder="Città">
+
+            <div class="gruppo-fasce">
+                <span class="titolo-fasce">Quando</span>
+                {% for chiave, etichetta, orario in fasce %}
+                <label class="pill-fascia">
+                    <input type="checkbox" name="fascia" value="{{ chiave }}" {% if chiave in fasce_sel %}checked{% endif %}>
+                    {{ etichetta }} <small>{{ orario }}</small>
+                </label>
+                {% endfor %}
+            </div>
+
+            {% if utente_nome %}
+            <label class="filtro"><input type="checkbox" name="eta" value="1" {% if solo_eta %}checked{% endif %}> Della mia età</label>
+            {% endif %}
+            <label class="filtro"><input type="checkbox" name="confermati" value="1" {% if solo_confermati %}checked{% endif %}> Confermati</label>
+            <button type="submit" class="btn-iscriviti">Cerca</button>
+            {% if q or citta or solo_eta or solo_confermati or fasce_sel %}<a class="link-dettaglio" href="{{ url_for('mappa') }}">Azzera</a>{% endif %}
+        </form>
+
+        <p id="mappa-stato" class="nota-mappa">Caricamento della mappa...</p>
+        <div id="mappa" class="mappa-box"></div>
+    </main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+    var mappa = L.map("mappa").setView([42.5, 12.5], 6);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap"
+    }).addTo(mappa);
+
+    function esc(t) {
+        var d = document.createElement("div");
+        d.textContent = t == null ? "" : String(t);
+        return d.innerHTML;
+    }
+
+    var stato = document.getElementById("mappa-stato");
+    var query = window.location.search.replace(/^\?/, "");
+
+    fetch("/?json=1" + (query ? "&" + query : ""), { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (dati) {
+            if (!dati.length) {
+                stato.textContent = "Nessun tavolo con una posizione da mostrare.";
+                return;
+            }
+            stato.textContent = dati.length + (dati.length === 1 ? " tavolo sulla mappa" : " tavoli sulla mappa");
+            var punti = [];
+            dati.forEach(function (t) {
+                var html = "<strong>" + esc(t.tema) + "</strong>" + (t.confermato ? " ✅" : "") +
+                    "<br>📍 " + esc(t.locale) + (t.citta ? ", " + esc(t.citta) : "") +
+                    "<br>🗓️ " + esc(t.data) +
+                    "<br>" + esc(t.iscritti) + "/" + esc(t.posti) + " posti" +
+                    '<br><a href="' + esc(t.url) + '">Vedi dettagli →</a>';
+                L.marker([t.lat, t.lng]).addTo(mappa).bindPopup(html);
+                punti.push([t.lat, t.lng]);
+            });
+            mappa.fitBounds(punti, { padding: [30, 30], maxZoom: 14 });
+        })
+        .catch(function () { stato.textContent = "Impossibile caricare la mappa, riprova."; });
+})();
+</script>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

@@ -273,6 +273,8 @@ def init_db():
     """)
 
     aggiungi_colonna(conn, "utenti", "notif_tavoli", "INTEGER DEFAULT 1")
+    aggiungi_colonna(conn, "tavoli", "lat", "DOUBLE PRECISION")
+    aggiungi_colonna(conn, "tavoli", "lng", "DOUBLE PRECISION")
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS notifiche (
@@ -469,6 +471,26 @@ def campanella(risposta):
     return risposta
 
 
+def geocodifica(locale, citta):
+    import json
+    import time
+    import urllib.parse
+    import urllib.request
+    for ricerca in (f"{locale}, {citta}, Italia", f"{citta}, Italia"):
+        try:
+            url = ("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=it&q="
+                   + urllib.parse.quote(ricerca))
+            req = urllib.request.Request(url, headers={"User-Agent": "Symposium/1.0 (social eating app)"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                dati = json.loads(r.read().decode())
+            if dati:
+                return float(dati[0]["lat"]), float(dati[0]["lon"])
+        except Exception:
+            pass
+        time.sleep(1)
+    return None, None
+
+
 def utente_per_id(conn, utente_id):
     if not utente_id:
         return None
@@ -494,7 +516,7 @@ def home():
     conn = get_db()
     tavoli = esegui(conn, """
         SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.citta, t.foto_url,
-               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id,
+               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome,
                u.foto_url AS organizzatore_foto,
@@ -525,6 +547,32 @@ def home():
         tavoli = [t for t in tavoli if t["min_partecipanti"] and t["iscritti"] >= t["min_partecipanti"]]
     if fasce_sel:
         tavoli = [t for t in tavoli if fascia_di(t["data_ora"]) in fasce_sel]
+
+    if request.args.get("json") == "1":
+        elenco = [dict(t) for t in tavoli]
+        conn2 = get_db()
+        tentati = 0
+        for t in elenco:
+            if t["lat"] is None and tentati < 4:
+                tentati += 1
+                la, ln = geocodifica(t["locale_nome"] or "", t["citta"] or "")
+                t["lat"], t["lng"] = (la, ln) if la is not None else (0.0, 0.0)
+                esegui(conn2, "UPDATE tavoli SET lat = ?, lng = ? WHERE id = ?", (t["lat"], t["lng"], t["id"]))
+        conn2.commit()
+        conn2.close()
+        return jsonify([{
+            "id": t["id"],
+            "tema": t["tema"],
+            "locale": t["locale_nome"] or "",
+            "citta": t["citta"] or "",
+            "data": data_it(t["data_ora"]),
+            "iscritti": t["iscritti"],
+            "posti": t["posti_totali"],
+            "confermato": bool(t["min_partecipanti"] and t["iscritti"] >= t["min_partecipanti"]),
+            "lat": t["lat"],
+            "lng": t["lng"],
+            "url": url_for("dettaglio_tavolo", tavolo_id=t["id"]),
+        } for t in elenco if t["lat"] and t["lng"]])
 
     return render_template("home.html", tavoli=tavoli, q=q, citta=citta,
                            solo_eta=solo_eta, solo_confermati=solo_confermati,
@@ -593,6 +641,97 @@ def notifiche_preferenze():
     conn.close()
     flash("Preferenze salvate.")
     return redirect(url_for("notifiche"))
+
+
+@app.route("/mappa")
+def mappa():
+    fasce_valide = {f[0] for f in FASCE}
+    return render_template(
+        "mappa.html",
+        q=request.args.get("q", "").strip(),
+        citta=request.args.get("citta", "").strip(),
+        solo_eta=request.args.get("eta") == "1",
+        solo_confermati=request.args.get("confermati") == "1",
+        fasce=FASCE,
+        fasce_sel=[f for f in request.args.getlist("fascia") if f in fasce_valide],
+    )
+
+
+def pulisci_testo(valore):
+    import re
+    return re.sub(r"[^\w\s'’-]", "", valore or "").strip()[:60]
+
+
+TIPI_LOCALE = [
+    ("", "Tutti i tipi", "restaurant|pub|bar|cafe|fast_food"),
+    ("ristorante", "Ristoranti e pizzerie", "restaurant|fast_food"),
+    ("pub", "Pub e birrerie", "pub"),
+    ("bar", "Bar e caffè", "bar|cafe"),
+]
+
+
+def cerca_locali(nome, citta, tipo):
+    import json
+    import urllib.parse
+    import urllib.request
+    amenity = next((t[2] for t in TIPI_LOCALE if t[0] == tipo), TIPI_LOCALE[0][2])
+    filtro_nome = f'["name"~"{nome}",i]' if nome else '["name"]'
+    query = (
+        "[out:json][timeout:20];"
+        f'area["name"~"^{citta}$",i]["boundary"="administrative"]["admin_level"="8"]->.a;'
+        f'nwr["amenity"~"^({amenity})$"]{filtro_nome}(area.a);'
+        "out center 80;"
+    )
+    try:
+        dati = urllib.parse.urlencode({"data": query}).encode()
+        req = urllib.request.Request(
+            "https://overpass-api.de/api/interpreter", data=dati,
+            headers={"User-Agent": "Symposium/1.0 (social eating app)"})
+        with urllib.request.urlopen(req, timeout=22) as r:
+            risposta = json.loads(r.read().decode())
+    except Exception:
+        return [], "Il servizio di ricerca non risponde, riprova tra poco."
+
+    visti = set()
+    risultati = []
+    for el in risposta.get("elements", []):
+        tag = el.get("tags", {})
+        nome_l = tag.get("name")
+        lat = el.get("lat") or (el.get("center") or {}).get("lat")
+        lng = el.get("lon") or (el.get("center") or {}).get("lon")
+        if not nome_l or lat is None or lng is None:
+            continue
+        indirizzo = " ".join(x for x in (tag.get("addr:street"), tag.get("addr:housenumber")) if x)
+        chiave = (nome_l.lower(), indirizzo.lower())
+        if chiave in visti:
+            continue
+        visti.add(chiave)
+        risultati.append({
+            "nome": nome_l,
+            "indirizzo": indirizzo,
+            "tipo": {"restaurant": "Ristorante", "pub": "Pub", "bar": "Bar", "cafe": "Caffè",
+                     "fast_food": "Fast food"}.get(tag.get("amenity"), ""),
+            "lat": round(float(lat), 6),
+            "lng": round(float(lng), 6),
+        })
+    risultati.sort(key=lambda x: x["nome"].lower())
+    if not risultati:
+        return [], "Nessun locale trovato: controlla il nome della città (comune)."
+    return risultati, None
+
+
+@app.route("/locali")
+def locali():
+    nome = pulisci_testo(request.args.get("nome", ""))
+    citta = pulisci_testo(request.args.get("citta", ""))
+    tipo = request.args.get("tipo", "")
+    risultati, errore = [], None
+    if citta:
+        risultati, errore = cerca_locali(nome, citta, tipo)
+    elif nome:
+        errore = "Indica anche la città in cui cercare."
+    return render_template("locali.html", nome=nome, citta=citta, tipo=tipo,
+                           tipi=TIPI_LOCALE, risultati=risultati, errore=errore)
 
 
 @app.route("/miei-tavoli")
@@ -1118,6 +1257,13 @@ def nuovo_tavolo():
         esegui(conn,
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
+        try:
+            lat = float(request.form.get("lat", ""))
+            lng = float(request.form.get("lng", ""))
+        except ValueError:
+            lat, lng = geocodifica(locale_nome, citta)
+        if lat is not None:
+            esegui(conn, "UPDATE tavoli SET lat = ?, lng = ? WHERE id = ?", (lat, lng, tavolo_id))
         if citta:
             destinatari = esegui(conn, """
                 SELECT id FROM utenti
