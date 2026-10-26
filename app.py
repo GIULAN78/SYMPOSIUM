@@ -795,6 +795,19 @@ def home():
     if fasce_sel:
         tavoli = [t for t in tavoli if fascia_di(t["data_ora"]) in fasce_sel]
 
+    pos = pos_da_cookie()
+    if pos:
+        tavoli = [dict(t) for t in tavoli]
+        for t in tavoli:
+            if t["lat"] and t["lng"]:
+                t["km"] = round(distanza_km(pos[0], pos[1], t["lat"], t["lng"]), 1)
+            else:
+                t["km"] = None
+        raggio = request.args.get("raggio", "")
+        if raggio.isdigit() and int(raggio) in (10, 30, 50, 100):
+            tavoli = [t for t in tavoli if t["km"] is not None and t["km"] <= int(raggio)]
+        if request.args.get("vicini") == "1":
+            tavoli.sort(key=lambda t: (t["km"] is None, t["km"] or 0))
     if request.args.get("json") == "1":
         elenco = [dict(t) for t in tavoli]
         conn2 = get_db()
@@ -2143,6 +2156,56 @@ def wallet_acquista():
         return redirect(d["url_pagamento"])
     flash((d or {}).get("messaggio") or "Acquisto non disponibile al momento: riprova più tardi.")
     return redirect(url_for("wallet"))
+
+
+def pos_da_cookie():
+    valore = request.cookies.get("pos", "")
+    try:
+        a, b = valore.split("_")
+        lat, lng = float(a), float(b)
+    except ValueError:
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return None
+    return lat, lng
+
+
+def distanza_km(lat1, lng1, lat2, lng2):
+    import math
+    r = 6371.0
+    f1, f2 = math.radians(lat1), math.radians(lat2)
+    df = f2 - f1
+    dl = math.radians(lng2 - lng1)
+    x = math.sin(df / 2) ** 2 + math.cos(f1) * math.cos(f2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(x))
+
+
+@app.context_processor
+def posizione_ctx():
+    return {
+        "pos_attiva": pos_da_cookie() is not None,
+        "raggio_sel": request.args.get("raggio", ""),
+        "vicini_sel": request.args.get("vicini") == "1",
+    }
+
+
+@app.after_request
+def popup_posizione(risposta):
+    try:
+        if (
+            risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint != "home"
+        ):
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        if "</body>" in testo:
+            risposta.set_data(testo.replace(
+                "</body>",
+                render_template("_posizione.html", pos_attiva=pos_da_cookie() is not None) + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
 
 
 @app.route("/miei-tavoli")

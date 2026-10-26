@@ -47,6 +47,13 @@
             <label class="filtro"><input type="checkbox" name="eta" value="1" {% if solo_eta %}checked{% endif %}> Della mia età</label>
             {% endif %}
             <label class="filtro"><input type="checkbox" name="confermati" value="1" {% if solo_confermati %}checked{% endif %}> Confermati</label>
+            {% if pos_attiva %}
+            <select name="raggio" class="select-tipo">
+                <option value="">Tutte le distanze</option>
+                {% for km in (10, 30, 50, 100) %}<option value="{{ km }}" {% if raggio_sel == km|string %}selected{% endif %}>Entro {{ km }} km</option>{% endfor %}
+            </select>
+            <label class="filtro"><input type="checkbox" name="vicini" value="1" {% if vicini_sel %}checked{% endif %}> Più vicini</label>
+            {% endif %}
             <button type="submit" class="btn-iscriviti">Cerca</button>
             {% if q or citta or solo_eta or solo_confermati or fasce_sel %}<a class="link-dettaglio" href="{{ url_for('home') }}">Azzera</a>{% endif %}
         </form>
@@ -72,6 +79,7 @@
                         {% if t.voti_locale %}<span class="badge badge-grad">👍 {{ t.voti_pos|percento(t.voti_locale) }}%</span>{% endif %}
                     </p>
                     <p class="data">🗓️ {{ t.data_ora|data_it }}</p>
+                    {% if t.km is defined and t.km is not none %}<p>📏 {{ ('%.1f'|format(t.km))|replace('.', ',') }} km da te</p>{% endif %}
                     {% if t.eta_min is not none and t.eta_max is not none %}
                     <p>👥 Età {{ t.eta_min }}-{{ t.eta_max }}</p>
                     {% endif %}
