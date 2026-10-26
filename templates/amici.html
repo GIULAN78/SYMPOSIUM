@@ -1,0 +1,63 @@
+{% from "_macro.html" import avatar %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amici - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <h3 class="titolo-sezione">👥 I tuoi amici</h3>
+        {% if not amici %}
+            <p class="vuoto">Non hai ancora amici. Aprendo il profilo di un partecipante puoi aggiungerlo.</p>
+        {% endif %}
+        <div class="lista-partecipanti">
+            {% for a in amici %}
+            <div class="partecipante riga-partecipante">
+                {{ avatar(a.foto_url, a.nome) }}
+                <div class="info-part">
+                    <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=a.id) }}"><strong>{{ a.nome }}</strong></a>
+                    {% if a.citta %}<p class="interessi">{{ a.citta }}</p>{% endif %}
+                </div>
+                <form action="{{ url_for('amico', altro_id=a.id) }}" method="POST">
+                    <button type="submit" class="btn-piccolo">Rimuovi</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3 class="titolo-sezione">🚫 Utenti bloccati</h3>
+        {% if not bloccati %}
+            <p class="vuoto">Non hai bloccato nessuno.</p>
+        {% endif %}
+        <div class="lista-partecipanti">
+            {% for b in bloccati %}
+            <div class="partecipante riga-partecipante">
+                {{ avatar(b.foto_url, b.nome) }}
+                <div class="info-part">
+                    <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=b.id) }}"><strong>{{ b.nome }}</strong></a>
+                </div>
+                <form action="{{ url_for('blocca', altro_id=b.id) }}" method="POST">
+                    <button type="submit" class="btn-piccolo">Sblocca</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

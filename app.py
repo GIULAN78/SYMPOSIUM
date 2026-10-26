@@ -308,6 +308,34 @@ def init_db():
         )
     """)
 
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS amici (
+            id {pk},
+            utente_id INTEGER REFERENCES utenti (id),
+            amico_id INTEGER REFERENCES utenti (id),
+            UNIQUE (utente_id, amico_id)
+        )
+    """)
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS bloccati (
+            id {pk},
+            utente_id INTEGER REFERENCES utenti (id),
+            bloccato_id INTEGER REFERENCES utenti (id),
+            UNIQUE (utente_id, bloccato_id)
+        )
+    """)
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS segnalazioni (
+            id {pk},
+            da_utente INTEGER REFERENCES utenti (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            motivo TEXT,
+            creato_il TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -535,6 +563,36 @@ def stato_preferiti(tavolo_id, locale_id):
     return {"preferito": p is not None, "segue_locale": sl is not None}
 
 
+def relazioni_bloccate(conn, uid):
+    a = esegui(conn, "SELECT bloccato_id AS x FROM bloccati WHERE utente_id = ?", (uid,)).fetchall()
+    b = esegui(conn, "SELECT utente_id AS x FROM bloccati WHERE bloccato_id = ?", (uid,)).fetchall()
+    return {r["x"] for r in a} | {r["x"] for r in b}
+
+
+def utenti_oscurati():
+    uid = session.get("utente_id")
+    if not uid:
+        return set()
+    conn = get_db()
+    r = relazioni_bloccate(conn, uid)
+    conn.close()
+    return r
+
+
+def stato_relazione(altro_id):
+    uid = session.get("utente_id")
+    if not uid or uid == altro_id:
+        return {"e_amico": False, "e_bloccato": False}
+    conn = get_db()
+    a = esegui(conn, "SELECT 1 AS ok FROM amici WHERE utente_id = ? AND amico_id = ?", (uid, altro_id)).fetchone()
+    b = esegui(conn, "SELECT 1 AS ok FROM bloccati WHERE utente_id = ? AND bloccato_id = ?", (uid, altro_id)).fetchone()
+    conn.close()
+    return {"e_amico": a is not None, "e_bloccato": b is not None}
+
+
+MOTIVI_SEGNALAZIONE = ("Comportamento inappropriato", "Profilo falso", "Spam", "Altro")
+
+
 def utente_per_id(conn, utente_id):
     if not utente_id:
         return None
@@ -589,6 +647,9 @@ def home():
                   and (t["eta_max"] is None or mia_eta <= t["eta_max"])]
     if solo_confermati:
         tavoli = [t for t in tavoli if t["min_partecipanti"] and t["iscritti"] >= t["min_partecipanti"]]
+    oscurati = utenti_oscurati()
+    if oscurati:
+        tavoli = [t for t in tavoli if t["organizzatore_id"] not in oscurati]
     if fasce_sel:
         tavoli = [t for t in tavoli if fascia_di(t["data_ora"]) in fasce_sel]
 
@@ -838,6 +899,96 @@ def preferiti():
     """, (uid,)).fetchall()
     conn.close()
     return render_template("preferiti.html", tavoli=tavoli, seguiti=seguiti)
+
+
+@app.route("/utente/<int:altro_id>/amico", methods=["POST"])
+@login_richiesto
+def amico(altro_id):
+    uid = session["utente_id"]
+    if altro_id == uid:
+        abort(400)
+    conn = get_db()
+    if not utente_per_id(conn, altro_id):
+        conn.close()
+        abort(404)
+    if altro_id in relazioni_bloccate(conn, uid):
+        conn.close()
+        flash("Non puoi aggiungere questo utente.")
+        return redirect(url_for("profilo_utente", utente_id=altro_id))
+    r = esegui(conn, "SELECT id FROM amici WHERE utente_id = ? AND amico_id = ?", (uid, altro_id)).fetchone()
+    if r:
+        esegui(conn, "DELETE FROM amici WHERE id = ?", (r["id"],))
+        flash("Utente rimosso dagli amici.")
+    else:
+        esegui(conn, "INSERT INTO amici (utente_id, amico_id) VALUES (?, ?)", (uid, altro_id))
+        notifica(conn, altro_id, "amico", session.get("utente_nome") or "Nuovo amico",
+                 "ti ha aggiunto agli amici", url_for("profilo_utente", utente_id=uid), uid)
+        flash("Utente aggiunto agli amici.")
+    conn.commit()
+    conn.close()
+    return redirect(url_for("profilo_utente", utente_id=altro_id))
+
+
+@app.route("/utente/<int:altro_id>/blocca", methods=["POST"])
+@login_richiesto
+def blocca(altro_id):
+    uid = session["utente_id"]
+    if altro_id == uid:
+        abort(400)
+    conn = get_db()
+    if not utente_per_id(conn, altro_id):
+        conn.close()
+        abort(404)
+    r = esegui(conn, "SELECT id FROM bloccati WHERE utente_id = ? AND bloccato_id = ?", (uid, altro_id)).fetchone()
+    if r:
+        esegui(conn, "DELETE FROM bloccati WHERE id = ?", (r["id"],))
+        flash("Utente sbloccato.")
+    else:
+        esegui(conn, "INSERT INTO bloccati (utente_id, bloccato_id) VALUES (?, ?)", (uid, altro_id))
+        esegui(conn, "DELETE FROM amici WHERE (utente_id = ? AND amico_id = ?) OR (utente_id = ? AND amico_id = ?)",
+               (uid, altro_id, altro_id, uid))
+        flash("Utente bloccato.")
+    conn.commit()
+    conn.close()
+    return redirect(url_for("profilo_utente", utente_id=altro_id))
+
+
+@app.route("/utente/<int:altro_id>/segnala", methods=["POST"])
+@login_richiesto
+def segnala(altro_id):
+    uid = session["utente_id"]
+    motivo = request.form.get("motivo", "")
+    if altro_id == uid or motivo not in MOTIVI_SEGNALAZIONE:
+        abort(400)
+    conn = get_db()
+    if not utente_per_id(conn, altro_id):
+        conn.close()
+        abort(404)
+    esegui(conn, "INSERT INTO segnalazioni (da_utente, utente_id, motivo, creato_il) VALUES (?, ?, ?, ?)",
+           (uid, altro_id, motivo, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    flash("Grazie, la segnalazione è stata inviata.")
+    return redirect(url_for("profilo_utente", utente_id=altro_id))
+
+
+@app.route("/amici")
+@login_richiesto
+def amici():
+    uid = session["utente_id"]
+    conn = get_db()
+    lista = esegui(conn, """
+        SELECT u.id, u.nome, u.foto_url, u.citta
+        FROM amici a JOIN utenti u ON u.id = a.amico_id
+        WHERE a.utente_id = ? ORDER BY u.nome ASC
+    """, (uid,)).fetchall()
+    bloccati = esegui(conn, """
+        SELECT u.id, u.nome, u.foto_url, u.citta
+        FROM bloccati b JOIN utenti u ON u.id = b.bloccato_id
+        WHERE b.utente_id = ? ORDER BY u.nome ASC
+    """, (uid,)).fetchall()
+    conn.close()
+    return render_template("amici.html", amici=lista, bloccati=bloccati)
 
 
 @app.route("/miei-tavoli")
@@ -1282,6 +1433,7 @@ def profilo_utente(utente_id):
         affidabilita=affidabilita(assenze, partecipato),
         compat_label=compat_label,
         mio=(session.get("utente_id") == utente_id),
+        **stato_relazione(utente_id),
     )
 
 
@@ -1388,6 +1540,11 @@ def nuovo_tavolo():
                 notifica(conn, f["utente_id"], "locale_seguito", locale_nome,
                          "È stato creato un tavolo in un locale che segui",
                          url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
+        for f in esegui(conn, "SELECT utente_id FROM amici WHERE amico_id = ?", (utente_id,)).fetchall():
+            if f["utente_id"] not in avvisati:
+                notifica(conn, f["utente_id"], "amico_tavolo", locale_nome,
+                         f"Il tuo amico {session.get('utente_nome')} ha creato un tavolo",
+                         url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
         conn.commit()
         conn.close()
         return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
@@ -1411,6 +1568,11 @@ def iscriviti(tavolo_id):
 
     io = utente_per_id(conn, session["utente_id"])
     mia_eta = eta_da(io["data_nascita"]) if io else None
+    org = esegui(conn, "SELECT organizzatore_id FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    if org and org["organizzatore_id"] in relazioni_bloccate(conn, session["utente_id"]):
+        conn.close()
+        flash("Non puoi iscriverti a questo tavolo.")
+        return redirect(url_for("home"))
     ha_limiti = tavolo["eta_min"] is not None or tavolo["eta_max"] is not None
 
     if ha_limiti and mia_eta is None:

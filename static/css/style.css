@@ -846,3 +846,19 @@ main {
     gap: 0.5rem;
     margin: 0.6rem 0;
 }
+
+details.segnala {
+    margin-top: 0.8rem;
+}
+
+details.segnala summary {
+    display: inline-block;
+    cursor: pointer;
+}
+
+details.segnala form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}

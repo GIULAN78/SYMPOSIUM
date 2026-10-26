@@ -44,6 +44,29 @@
             {% if mio %}
                 <a class="btn-nuovo" href="{{ url_for('modifica_profilo') }}">Modifica profilo</a>
             {% endif %}
+
+            {% if utente_nome and not mio %}
+            <div class="azioni-fav">
+                <form action="{{ url_for('amico', altro_id=u.id) }}" method="POST">
+                    <button type="submit" class="btn-piccolo">{{ '✅ Nei tuoi amici' if e_amico else '➕ Aggiungi agli amici' }}</button>
+                </form>
+                <form action="{{ url_for('blocca', altro_id=u.id) }}" method="POST" {% if not e_bloccato %}onsubmit="return confirm('Bloccare questo utente? Non vedrete più i rispettivi tavoli.');"{% endif %}>
+                    <button type="submit" class="btn-piccolo">{{ '✔️ Sblocca' if e_bloccato else '🚫 Blocca' }}</button>
+                </form>
+            </div>
+            <details class="segnala">
+                <summary class="btn-piccolo">🚩 Segnala questo profilo</summary>
+                <form action="{{ url_for('segnala', altro_id=u.id) }}" method="POST">
+                    <select name="motivo" class="select-tipo">
+                        <option>Comportamento inappropriato</option>
+                        <option>Profilo falso</option>
+                        <option>Spam</option>
+                        <option>Altro</option>
+                    </select>
+                    <button type="submit" class="btn-piccolo">Invia segnalazione</button>
+                </form>
+            </details>
+            {% endif %}
         </div>
 
         <div class="card-tavolo scheda">
