@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preferiti - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <h3 class="titolo-sezione">❤️ Tavoli preferiti</h3>
+        {% if not tavoli %}
+            <p class="vuoto">Nessun tavolo nei preferiti. Tocca il cuore su un tavolo per salvarlo.</p>
+        {% endif %}
+        <div class="lista-tavoli">
+            {% for t in tavoli %}
+            <div class="card-tavolo">
+                <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a></h2>
+                <p>📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}</p>
+                <p>🗓️ {{ t.data_ora|data_it }}</p>
+                <p>{{ t.iscritti }} / {{ t.posti_totali }} posti occupati</p>
+                <form action="{{ url_for('preferito', tavolo_id=t.id) }}" method="POST">
+                    <button type="submit" class="btn-piccolo">Rimuovi dai preferiti</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3 class="titolo-sezione">🔔 Locali che segui</h3>
+        {% if not seguiti %}
+            <p class="vuoto">Non segui nessun locale. Aprendo un tavolo puoi seguire il suo locale.</p>
+        {% endif %}
+        <div class="lista-tavoli">
+            {% for l in seguiti %}
+            <div class="card-tavolo">
+                <h2>{{ l.nome }}</h2>
+                <form action="{{ url_for('segui_locale', locale_id=l.id) }}" method="POST">
+                    <button type="submit" class="btn-piccolo">Smetti di seguire</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

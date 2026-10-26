@@ -826,3 +826,23 @@ main {
     border-radius: 6px;
     font-size: 1rem;
 }
+
+.cuore-form {
+    float: right;
+    margin: 0 0 0 0.5rem;
+}
+
+.cuore {
+    background: none;
+    border: none;
+    font-size: 1.6rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.azioni-fav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.6rem 0;
+}

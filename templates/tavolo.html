@@ -26,6 +26,18 @@
             <img class="copertina" src="{{ tavolo.foto_url }}" alt="{{ tavolo.tema }}">
             {% endif %}
             <div class="corpo-card">
+                {% if utente_nome %}
+                <div class="azioni-fav">
+                    <form action="{{ url_for('preferito', tavolo_id=tavolo.id) }}" method="POST">
+                        <button type="submit" class="btn-piccolo">{{ '❤️ Nei preferiti' if preferito else '🤍 Aggiungi ai preferiti' }}</button>
+                    </form>
+                    {% if tavolo.locale_id %}
+                    <form action="{{ url_for('segui_locale', locale_id=tavolo.locale_id) }}" method="POST">
+                        <button type="submit" class="btn-piccolo">{{ '🔔 Segui già questo locale' if segue_locale else '🔕 Segui questo locale' }}</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endif %}
                 <h2>{{ tavolo.tema }}{% if confermato %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if concluso %} <span class="badge badge-fine">Concluso</span>{% endif %}</h2>
                 <p class="riga-org">
                     {{ avatar(tavolo.organizzatore_foto, tavolo.organizzatore_nome, 'avatar-sm') }}

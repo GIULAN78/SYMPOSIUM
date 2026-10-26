@@ -290,6 +290,24 @@ def init_db():
         )
     """)
 
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS preferiti (
+            id {pk},
+            tavolo_id INTEGER REFERENCES tavoli (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            UNIQUE (tavolo_id, utente_id)
+        )
+    """)
+
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS locali_seguiti (
+            id {pk},
+            locale_id INTEGER REFERENCES locali (id),
+            utente_id INTEGER REFERENCES utenti (id),
+            UNIQUE (locale_id, utente_id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -489,6 +507,32 @@ def geocodifica(locale, citta):
             pass
         time.sleep(1)
     return None, None
+
+
+@app.context_processor
+def preferiti_corrente():
+    if "utente_id" not in session or request.endpoint != "home":
+        return {"preferiti_ids": set()}
+    conn = get_db()
+    righe = esegui(conn, "SELECT tavolo_id FROM preferiti WHERE utente_id = ?",
+                   (session["utente_id"],)).fetchall()
+    conn.close()
+    return {"preferiti_ids": {r["tavolo_id"] for r in righe}}
+
+
+def stato_preferiti(tavolo_id, locale_id):
+    uid = session.get("utente_id")
+    if not uid:
+        return {"preferito": False, "segue_locale": False}
+    conn = get_db()
+    p = esegui(conn, "SELECT 1 AS ok FROM preferiti WHERE tavolo_id = ? AND utente_id = ?",
+               (tavolo_id, uid)).fetchone()
+    sl = None
+    if locale_id:
+        sl = esegui(conn, "SELECT 1 AS ok FROM locali_seguiti WHERE locale_id = ? AND utente_id = ?",
+                    (locale_id, uid)).fetchone()
+    conn.close()
+    return {"preferito": p is not None, "segue_locale": sl is not None}
 
 
 def utente_per_id(conn, utente_id):
@@ -734,6 +778,68 @@ def locali():
                            tipi=TIPI_LOCALE, risultati=risultati, errore=errore)
 
 
+@app.route("/tavolo/<int:tavolo_id>/preferito", methods=["POST"])
+@login_richiesto
+def preferito(tavolo_id):
+    uid = session["utente_id"]
+    conn = get_db()
+    if not esegui(conn, "SELECT 1 AS ok FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone():
+        conn.close()
+        abort(404)
+    r = esegui(conn, "SELECT id FROM preferiti WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid)).fetchone()
+    if r:
+        esegui(conn, "DELETE FROM preferiti WHERE id = ?", (r["id"],))
+    else:
+        esegui(conn, "INSERT INTO preferiti (tavolo_id, utente_id) VALUES (?, ?)", (tavolo_id, uid))
+    conn.commit()
+    conn.close()
+    return redirect(request.referrer or url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
+@app.route("/locale/<int:locale_id>/segui", methods=["POST"])
+@login_richiesto
+def segui_locale(locale_id):
+    uid = session["utente_id"]
+    conn = get_db()
+    if not esegui(conn, "SELECT 1 AS ok FROM locali WHERE id = ?", (locale_id,)).fetchone():
+        conn.close()
+        abort(404)
+    r = esegui(conn, "SELECT id FROM locali_seguiti WHERE locale_id = ? AND utente_id = ?", (locale_id, uid)).fetchone()
+    if r:
+        esegui(conn, "DELETE FROM locali_seguiti WHERE id = ?", (r["id"],))
+        flash("Non segui più questo locale.")
+    else:
+        esegui(conn, "INSERT INTO locali_seguiti (locale_id, utente_id) VALUES (?, ?)", (locale_id, uid))
+        flash("Ora segui questo locale: ti avviseremo quando qualcuno crea un tavolo lì.")
+    conn.commit()
+    conn.close()
+    return redirect(request.referrer or url_for("home"))
+
+
+@app.route("/preferiti")
+@login_richiesto
+def preferiti():
+    uid = session["utente_id"]
+    conn = get_db()
+    tavoli = esegui(conn, """
+        SELECT t.id, t.tema, t.data_ora, t.posti_totali, t.citta, l.nome AS locale_nome,
+               (SELECT COUNT(*) FROM iscrizioni x WHERE x.tavolo_id = t.id) AS iscritti
+        FROM tavoli t
+        JOIN preferiti p ON p.tavolo_id = t.id AND p.utente_id = ?
+        LEFT JOIN locali l ON l.id = t.locale_id
+        ORDER BY t.data_ora ASC
+    """, (uid,)).fetchall()
+    seguiti = esegui(conn, """
+        SELECT l.id, l.nome
+        FROM locali_seguiti s
+        JOIN locali l ON l.id = s.locale_id
+        WHERE s.utente_id = ?
+        ORDER BY l.nome ASC
+    """, (uid,)).fetchall()
+    conn.close()
+    return render_template("preferiti.html", tavoli=tavoli, seguiti=seguiti)
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -858,6 +964,7 @@ def dettaglio_tavolo(tavolo_id):
         mio_voto=mio_voto,
         stat_criteri=stat_criteri,
         prezzo_top=prezzo_top,
+        **stato_preferiti(tavolo_id, tavolo["locale_id"]),
     )
 
 
@@ -1273,6 +1380,14 @@ def nuovo_tavolo():
                 notifica(conn, d["id"], "nuovo_tavolo", locale_nome,
                          f"{session.get('utente_nome')} ha creato un tavolo che potrebbe interessarti",
                          url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
+        avvisati = {d["id"] for d in destinatari} if citta else set()
+        seguaci = esegui(conn, "SELECT utente_id FROM locali_seguiti WHERE locale_id = ? AND utente_id != ?",
+                         (locale_id, utente_id)).fetchall()
+        for f in seguaci:
+            if f["utente_id"] not in avvisati:
+                notifica(conn, f["utente_id"], "locale_seguito", locale_nome,
+                         "È stato creato un tavolo in un locale che segui",
+                         url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
         conn.commit()
         conn.close()
         return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
@@ -1378,6 +1493,7 @@ def elimina_tavolo(tavolo_id):
         conn.close()
         abort(403)
 
+    esegui(conn, "DELETE FROM preferiti WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM messaggi WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM valutazioni_criteri WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM compatibilita WHERE tavolo_id = ?", (tavolo_id,))
