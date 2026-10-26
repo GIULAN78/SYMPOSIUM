@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Segnalazioni - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('admin') }}">← Pannello di controllo</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        {% include "_admin_nav.html" %}
+
+        <h3 class="titolo-sezione">Segnalazioni ({{ segnalazioni|length }})</h3>
+        {% if not segnalazioni %}<p class="vuoto">Nessuna segnalazione.</p>{% endif %}
+        <div class="lista-partecipanti">
+            {% for s in segnalazioni %}
+            <div class="partecipante riga-partecipante">
+                <div class="info-part">
+                    <strong>{{ s.da_nome or 'Utente eliminato' }}</strong> ha segnalato
+                    {% if s.contro_nome %}<a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=s.contro_id) }}"><strong>{{ s.contro_nome }}</strong></a>{% else %}<strong>un utente eliminato</strong>{% endif %}
+                    {% if s.gestita %}<span class="badge badge-conf">gestita</span>{% else %}<span class="badge badge-ass">da gestire</span>{% endif %}
+                    {% if s.contro_sospeso %}<span class="badge badge-ass">sospeso</span>{% endif %}
+                    <p class="interessi">{{ s.motivo }} · {{ s.creato_il|data_it }}</p>
+                </div>
+                <div class="azioni-ric">
+                    <form action="{{ url_for('admin_segnalazione_gestita', sid=s.id) }}" method="POST">
+                        <button type="submit" class="btn-piccolo">{{ 'Riapri' if s.gestita else 'Segna come gestita' }}</button>
+                    </form>
+                    {% if s.contro_nome %}
+                    <form action="{{ url_for('admin_utente_sospendi', bersaglio=s.contro_id) }}" method="POST">
+                        <button type="submit" class="btn-piccolo">{{ 'Riattiva' if s.contro_sospeso else 'Sospendi utente' }}</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

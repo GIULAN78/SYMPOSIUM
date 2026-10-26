@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Symposium</title>
+    <title>Pannello di controllo - Symposium</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#0D5EAF">
+    <meta name="theme-color" content="#0b1437">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 </head>
 <body>
@@ -20,10 +20,27 @@
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
 
+        {% include "_admin_nav.html" %}
+
+        <h3 class="titolo-sezione">⚙️ Pannello di controllo Symposium</h3>
+
+        <div class="griglia-stat">
+            <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>
+            <div class="stat-card"><strong>{{ stat.nuovi }}</strong><span>nuovi (7 giorni)</span></div>
+            <div class="stat-card"><strong>{{ stat.premium }}</strong><span>Premium</span></div>
+            <div class="stat-card"><strong>{{ stat.sospesi }}</strong><span>sospesi</span></div>
+            <div class="stat-card"><strong>{{ stat.banchetti }}</strong><span>banchetti</span></div>
+            <div class="stat-card"><strong>{{ stat.in_programma }}</strong><span>in programma</span></div>
+            <div class="stat-card"><strong>{{ stat.conclusi }}</strong><span>conclusi</span></div>
+            <div class="stat-card"><strong>{{ stat.iscrizioni }}</strong><span>posti presi</span></div>
+            <div class="stat-card"><strong>{{ stat.messaggi }}</strong><span>messaggi</span></div>
+            <div class="stat-card"><strong>{{ stat.match }}</strong><span>match</span></div>
+            <div class="stat-card"><strong>{{ stat.segnalazioni }}</strong><span>segnalazioni aperte</span></div>
+        </div>
+
         <div class="card-tavolo">
             <div class="corpo-card">
-                <h2>⚙️ Pannello Admin</h2>
-                <p class="etichetta">Premium oggi</p>
+                <h2>⭐ Premium</h2>
                 {% if a_pagamento %}
                 <p><span class="badge badge-ass">A PAGAMENTO</span> Solo i Premium vedono e frequentano i banchetti degli dei.</p>
                 <form action="{{ url_for('admin_premium_toggle') }}" method="POST">
@@ -39,21 +56,16 @@
             </div>
         </div>
 
-        <a class="btn-nuovo" href="{{ url_for('immagini_sito') }}">🖼️ Immagini del sito</a>
-
-        <h3 class="titolo-sezione">Utenti ({{ utenti|length }})</h3>
-        <div class="lista-partecipanti">
-            {% for u in utenti %}
-            <div class="partecipante riga-partecipante">
-                <div class="info-part">
-                    <strong>{{ u.nome }}</strong>
-                    <p class="interessi">{{ u.email }}{% if u.premium %} · ⭐ Premium{% endif %}</p>
-                </div>
-                <form action="{{ url_for('admin_utente_premium', utente_target=u.id) }}" method="POST">
-                    <button type="submit" class="btn-piccolo">{{ 'Togli Premium' if u.premium else 'Dai Premium' }}</button>
+        <div class="card-tavolo">
+            <div class="corpo-card">
+                <h2>📣 Annuncio a tutti</h2>
+                <p class="nota">Arriva come notifica 🔔 a tutti gli utenti non sospesi.</p>
+                <form class="form-tavolo form-nobordo" method="POST" action="{{ url_for('admin_annuncio') }}"
+                      onsubmit="return confirm('Inviare questo annuncio a tutti gli utenti?');">
+                    <textarea name="testo" rows="3" maxlength="300" placeholder="Scrivi il messaggio (massimo 300 caratteri)" required></textarea>
+                    <button type="submit" class="btn-nuovo">Invia annuncio</button>
                 </form>
             </div>
-            {% endfor %}
         </div>
     </main>
 <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>

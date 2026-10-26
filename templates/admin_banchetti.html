@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banchetti - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('admin') }}">← Pannello di controllo</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        {% include "_admin_nav.html" %}
+
+        <h3 class="titolo-sezione">Banchetti ({{ banchetti|length }})</h3>
+        <div class="lista-partecipanti">
+            {% for b in banchetti %}
+            <div class="partecipante riga-partecipante">
+                <div class="info-part">
+                    <a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=b.id) }}"><strong>{{ b.tema }}</strong></a>
+                    {% if b.esclusivo %}<span class="badge badge-esc">⭐ Banchetto degli dei</span>{% endif %}
+                    <p class="interessi">{{ b.data_ora|data_it }}{% if b.citta %} · {{ b.citta }}{% endif %} · {{ b.iscritti }}/{{ b.posti_totali }} posti · {{ b.org or 'organizzatore sconosciuto' }}</p>
+                </div>
+                <form action="{{ url_for('admin_banchetto_elimina', tavolo_id=b.id) }}" method="POST"
+                      onsubmit="return confirm('Eliminare questo banchetto e tutte le iscrizioni?');">
+                    <button type="submit" class="btn-piccolo">Elimina</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

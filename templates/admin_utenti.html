@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Utenti - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('admin') }}">← Pannello di controllo</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        {% include "_admin_nav.html" %}
+
+        <form class="form-ricerca" method="GET" action="{{ url_for('admin_utenti') }}">
+            <input type="text" name="q" value="{{ q }}" placeholder="Cerca per nome o email...">
+            <button type="submit" class="btn-iscriviti">Cerca</button>
+            {% if q %}<a class="link-dettaglio" href="{{ url_for('admin_utenti') }}">Azzera</a>{% endif %}
+        </form>
+
+        <h3 class="titolo-sezione">Utenti ({{ utenti|length }})</h3>
+        <div class="lista-partecipanti">
+            {% for u in utenti %}
+            <div class="partecipante riga-partecipante">
+                <div class="info-part">
+                    <a class="titolo-link" href="{{ url_for('profilo_utente', utente_id=u.id) }}"><strong>{{ u.nome }}</strong></a>
+                    {% if u.premium %}<span class="badge badge-esc">⭐ Premium</span>{% endif %}
+                    {% if u.sospeso %}<span class="badge badge-ass">sospeso</span>{% endif %}
+                    <p class="interessi">{{ u.email }}{% if u.citta %} · {{ u.citta }}{% endif %}</p>
+                </div>
+                <div class="azioni-ric">
+                    <form action="{{ url_for('admin_utente_premium', utente_target=u.id) }}" method="POST">
+                        <button type="submit" class="btn-piccolo">{{ 'Togli Premium' if u.premium else 'Dai Premium' }}</button>
+                    </form>
+                    <form action="{{ url_for('admin_utente_sospendi', bersaglio=u.id) }}" method="POST">
+                        <button type="submit" class="btn-piccolo">{{ 'Riattiva' if u.sospeso else 'Sospendi' }}</button>
+                    </form>
+                    <form action="{{ url_for('admin_utente_elimina', bersaglio=u.id) }}" method="POST"
+                          onsubmit="return confirm('Eliminare DEFINITIVAMENTE questo utente e i banchetti che ha organizzato?');">
+                        <button type="submit" class="btn-piccolo">Elimina</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

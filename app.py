@@ -368,6 +368,9 @@ def init_db():
         )
     """)
 
+    aggiungi_colonna(conn, "utenti", "sospeso", "INTEGER DEFAULT 0")
+    aggiungi_colonna(conn, "segnalazioni", "gestita", "INTEGER DEFAULT 0")
+
     conn.commit()
     conn.close()
 
@@ -1149,7 +1152,7 @@ def admin():
     a_pagamento = pagamento_attivo(conn)
     utenti = esegui(conn, "SELECT id, nome, email, premium FROM utenti ORDER BY id DESC LIMIT 200").fetchall()
     conn.close()
-    return render_template("admin.html", a_pagamento=a_pagamento, utenti=utenti)
+    return render_template("admin.html", a_pagamento=a_pagamento, utenti=utenti, stat=dati_dashboard())
 
 
 @app.route("/admin/premium", methods=["POST"])
@@ -1184,7 +1187,7 @@ def admin_utente_premium(utente_target):
     esegui(conn, "UPDATE utenti SET premium = ? WHERE id = ?", (0 if r["premium"] else 1, utente_target))
     conn.commit()
     conn.close()
-    return redirect(url_for("admin"))
+    return redirect(request.referrer or url_for("admin"))
 
 
 def cancella_tavoli(conn, ids):
@@ -1739,6 +1742,272 @@ def caricamento_overlay(risposta):
     except Exception:
         pass
     return risposta
+
+
+def solo_admin(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "utente_id" not in session:
+            flash("Accedi per continuare.")
+            return redirect(url_for("accedi"))
+        conn = get_db()
+        ok = e_admin(conn, session["utente_id"])
+        conn.close()
+        if not ok:
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def tabella_esiste(conn, nome):
+    if USA_PG:
+        r = esegui(conn, "SELECT 1 AS ok FROM information_schema.tables WHERE table_name = ?", (nome,)).fetchone()
+    else:
+        r = esegui(conn, "SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?", (nome,)).fetchone()
+    return r is not None
+
+
+def conta(conn, tabella, dove="1 = 1", params=()):
+    if not tabella_esiste(conn, tabella):
+        return 0
+    return int(esegui(conn, f"SELECT COUNT(*) AS n FROM {tabella} WHERE {dove}", params).fetchone()["n"])
+
+
+def dati_dashboard():
+    conn = get_db()
+    sette = (datetime.now() - timedelta(days=7)).isoformat()
+    ora = adesso_it().strftime("%Y-%m-%dT%H:%M")
+    tot_b = conta(conn, "tavoli")
+    prog = conta(conn, "tavoli", "data_ora >= ?", (ora,))
+    match = 0
+    if tabella_esiste(conn, "preferiti_utenti"):
+        match = int(esegui(conn, """
+            SELECT COUNT(*) AS n FROM preferiti_utenti p
+            JOIN preferiti_utenti q ON q.utente_id = p.salvato_id AND q.salvato_id = p.utente_id
+        """).fetchone()["n"]) // 2
+    d = {
+        "utenti": conta(conn, "utenti"),
+        "nuovi": conta(conn, "utenti", "creato_il >= ?", (sette,)),
+        "premium": conta(conn, "utenti", "premium = 1"),
+        "sospesi": conta(conn, "utenti", "sospeso = 1"),
+        "banchetti": tot_b,
+        "in_programma": prog,
+        "conclusi": tot_b - prog,
+        "iscrizioni": conta(conn, "iscrizioni"),
+        "messaggi": conta(conn, "messaggi") + conta(conn, "messaggi_privati"),
+        "match": match,
+        "segnalazioni": conta(conn, "segnalazioni", "COALESCE(gestita, 0) = 0"),
+    }
+    conn.close()
+    return d
+
+
+PULIZIA_UTENTE = (
+    ("messaggi", "utente_id = ?"),
+    ("valutazioni_criteri", "utente_id = ?"),
+    ("valutazioni_locale", "utente_id = ?"),
+    ("presenze", "segnalatore_id = ? OR utente_id = ?"),
+    ("compatibilita", "da_utente = ? OR a_utente = ?"),
+    ("assenze", "utente_id = ?"),
+    ("preferiti", "utente_id = ?"),
+    ("locali_seguiti", "utente_id = ?"),
+    ("richieste", "utente_id = ?"),
+    ("amici", "utente_id = ? OR amico_id = ?"),
+    ("bloccati", "utente_id = ? OR bloccato_id = ?"),
+    ("preferiti_utenti", "utente_id = ? OR salvato_id = ?"),
+    ("messaggi_privati", "da_utente = ? OR a_utente = ?"),
+    ("segnalazioni", "da_utente = ? OR utente_id = ?"),
+    ("notifiche", "utente_id = ? OR da_utente = ?"),
+    ("iscrizioni", "utente_id = ?"),
+)
+
+
+def cancella_utente(conn, uid):
+    ids = [r["id"] for r in esegui(conn, "SELECT id FROM tavoli WHERE organizzatore_id = ?", (uid,)).fetchall()]
+    cancella_tavoli(conn, ids)
+    for tab, dove in PULIZIA_UTENTE:
+        if tabella_esiste(conn, tab):
+            esegui(conn, f"DELETE FROM {tab} WHERE {dove}", (uid,) * dove.count("?"))
+    esegui(conn, "DELETE FROM utenti WHERE id = ?", (uid,))
+
+
+@app.context_processor
+def admin_ctx():
+    return {"immagini_ok": "immagini_sito" in app.view_functions}
+
+
+@app.before_request
+def controlla_sospeso():
+    if "utente_id" not in session or request.endpoint in (None, "static", "service_worker"):
+        return None
+    try:
+        conn = get_db()
+        r = esegui(conn, "SELECT sospeso FROM utenti WHERE id = ?", (session["utente_id"],)).fetchone()
+        conn.close()
+    except Exception:
+        return None
+    if r and r["sospeso"]:
+        session.clear()
+        flash("Il tuo account è stato sospeso. Contatta il gestore di Symposium.")
+        return redirect(url_for("accedi"))
+    return None
+
+
+@app.route("/admin/utenti")
+@solo_admin
+def admin_utenti():
+    q = request.args.get("q", "").strip()
+    conn = get_db()
+    utenti = esegui(conn, """
+        SELECT id, nome, email, citta, premium, sospeso, creato_il FROM utenti
+        WHERE LOWER(nome) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?)
+        ORDER BY id DESC LIMIT 200
+    """, (f"%{q}%", f"%{q}%")).fetchall()
+    conn.close()
+    return render_template("admin_utenti.html", utenti=utenti, q=q)
+
+
+@app.route("/admin/utente/<int:bersaglio>/sospendi", methods=["POST"])
+@solo_admin
+def admin_utente_sospendi(bersaglio):
+    conn = get_db()
+    if bersaglio == session["utente_id"] or e_admin(conn, bersaglio):
+        conn.close()
+        flash("Non puoi sospendere un amministratore.")
+        return redirect(request.referrer or url_for("admin_utenti"))
+    r = esegui(conn, "SELECT sospeso FROM utenti WHERE id = ?", (bersaglio,)).fetchone()
+    if not r:
+        conn.close()
+        abort(404)
+    nuovo = 0 if r["sospeso"] else 1
+    esegui(conn, "UPDATE utenti SET sospeso = ? WHERE id = ?", (nuovo, bersaglio))
+    conn.commit()
+    conn.close()
+    flash("Utente sospeso." if nuovo else "Utente riattivato.")
+    return redirect(request.referrer or url_for("admin_utenti"))
+
+
+@app.route("/admin/utente/<int:bersaglio>/elimina", methods=["POST"])
+@solo_admin
+def admin_utente_elimina(bersaglio):
+    conn = get_db()
+    if bersaglio == session["utente_id"] or e_admin(conn, bersaglio):
+        conn.close()
+        flash("Non puoi eliminare un amministratore.")
+        return redirect(request.referrer or url_for("admin_utenti"))
+    if not utente_per_id(conn, bersaglio):
+        conn.close()
+        abort(404)
+    cancella_utente(conn, bersaglio)
+    conn.commit()
+    conn.close()
+    flash("Utente eliminato.")
+    return redirect(request.referrer or url_for("admin_utenti"))
+
+
+@app.route("/admin/banchetti")
+@solo_admin
+def admin_banchetti():
+    conn = get_db()
+    righe = esegui(conn, """
+        SELECT t.id, t.tema, t.data_ora, t.citta, t.esclusivo, t.posti_totali, u.nome AS org,
+               (SELECT COUNT(*) FROM iscrizioni i WHERE i.tavolo_id = t.id) AS iscritti
+        FROM tavoli t LEFT JOIN utenti u ON u.id = t.organizzatore_id
+        ORDER BY t.id DESC LIMIT 200
+    """).fetchall()
+    conn.close()
+    return render_template("admin_banchetti.html", banchetti=righe)
+
+
+@app.route("/admin/banchetto/<int:tavolo_id>/elimina", methods=["POST"])
+@solo_admin
+def admin_banchetto_elimina(tavolo_id):
+    conn = get_db()
+    cancella_tavoli(conn, [tavolo_id])
+    conn.commit()
+    conn.close()
+    flash("Banchetto eliminato.")
+    return redirect(url_for("admin_banchetti"))
+
+
+@app.route("/admin/segnalazioni")
+@solo_admin
+def admin_segnalazioni():
+    conn = get_db()
+    righe = esegui(conn, """
+        SELECT s.id, s.motivo, s.creato_il, s.gestita, s.utente_id AS contro_id,
+               a.nome AS da_nome, b.nome AS contro_nome, b.sospeso AS contro_sospeso
+        FROM segnalazioni s
+        LEFT JOIN utenti a ON a.id = s.da_utente
+        LEFT JOIN utenti b ON b.id = s.utente_id
+        ORDER BY s.gestita ASC, s.id DESC LIMIT 200
+    """).fetchall()
+    conn.close()
+    return render_template("admin_segnalazioni.html", segnalazioni=righe)
+
+
+@app.route("/admin/segnalazione/<int:sid>/gestita", methods=["POST"])
+@solo_admin
+def admin_segnalazione_gestita(sid):
+    conn = get_db()
+    r = esegui(conn, "SELECT gestita FROM segnalazioni WHERE id = ?", (sid,)).fetchone()
+    if not r:
+        conn.close()
+        abort(404)
+    esegui(conn, "UPDATE segnalazioni SET gestita = ? WHERE id = ?", (0 if r["gestita"] else 1, sid))
+    conn.commit()
+    conn.close()
+    return redirect(request.referrer or url_for("admin_segnalazioni"))
+
+
+@app.route("/admin/annuncio", methods=["POST"])
+@solo_admin
+def admin_annuncio():
+    testo = request.form.get("testo", "").strip()[:300]
+    if not testo:
+        flash("Scrivi il testo dell'annuncio.")
+        return redirect(url_for("admin"))
+    conn = get_db()
+    ids = [r["id"] for r in esegui(conn, "SELECT id FROM utenti WHERE COALESCE(sospeso, 0) = 0").fetchall()]
+    for i in ids:
+        notifica(conn, i, "annuncio", "Symposium", testo, url_for("home"))
+    conn.commit()
+    conn.close()
+    flash(f"Annuncio inviato a {len(ids)} utenti.")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/sso")
+def admin_sso():
+    import base64
+    import hashlib
+    import hmac
+    import json
+    import time
+    segreto = os.environ.get("ADMIN_SSO_SECRET", "")
+    token = request.args.get("token", "")
+    if not segreto or "." not in token or not admin_email():
+        abort(404)
+    corpo, firma = token.rsplit(".", 1)
+    atteso = hmac.new(segreto.encode(), corpo.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(atteso, firma):
+        abort(403)
+    try:
+        dati = json.loads(base64.urlsafe_b64decode(corpo + "=" * (-len(corpo) % 4)).decode())
+        scadenza = int(dati["exp"])
+    except Exception:
+        abort(400)
+    if scadenza < time.time() or scadenza > time.time() + 300:
+        abort(403)
+    conn = get_db()
+    u = esegui(conn, "SELECT id, nome FROM utenti WHERE LOWER(email) = ?", (admin_email(),)).fetchone()
+    conn.close()
+    if not u:
+        flash("Nessun account Symposium con l'email dell'amministratore.")
+        return redirect(url_for("accedi"))
+    session["utente_id"] = u["id"]
+    session["utente_nome"] = u["nome"]
+    return redirect(url_for("admin"))
 
 
 @app.route("/miei-tavoli")

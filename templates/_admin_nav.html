@@ -1,0 +1,8 @@
+{% set e = request.endpoint %}
+<div class="toggle-vista">
+    <a class="{{ 'attivo' if e == 'admin' else '' }}" href="{{ url_for('admin') }}">📊 Dashboard</a>
+    <a class="{{ 'attivo' if e == 'admin_utenti' else '' }}" href="{{ url_for('admin_utenti') }}">👥 Utenti</a>
+    <a class="{{ 'attivo' if e == 'admin_banchetti' else '' }}" href="{{ url_for('admin_banchetti') }}">🍽️ Banchetti</a>
+    <a class="{{ 'attivo' if e == 'admin_segnalazioni' else '' }}" href="{{ url_for('admin_segnalazioni') }}">🚩 Segnalazioni</a>
+    {% if immagini_ok %}<a href="{{ url_for('immagini_sito') }}">🖼️ Immagini</a>{% endif %}
+</div>

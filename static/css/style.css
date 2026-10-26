@@ -1036,3 +1036,32 @@ header::after {
     border-radius: 8px;
     margin: 0.6rem 0;
 }
+
+.griglia-stat {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+
+.stat-card {
+    background: var(--avorio);
+    border: 1px solid var(--oro);
+    border-radius: 10px;
+    padding: 0.7rem;
+    text-align: center;
+    color: var(--testo);
+}
+
+.stat-card strong {
+    display: block;
+    font-size: 1.5rem;
+}
+
+.stat-card span {
+    font-size: 0.75rem;
+}
+
+.riga-partecipante {
+    flex-wrap: wrap;
+}
