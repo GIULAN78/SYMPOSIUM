@@ -15,7 +15,7 @@
         <h1>Symposium</h1>
         <p class="sottotitolo">Trova il tuo tavolo, condividi gli interessi</p>
         {% if utente_nome %}
-            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('profilo_utente', utente_id=utente_id) }}">Profilo</a> · <a href="{{ url_for('miei_tavoli') }}">I miei tavoli</a> · <a href="{{ url_for('preferiti') }}">Preferiti</a> · <a href="{{ url_for('amici') }}">Amici</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
+            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('profilo_utente', utente_id=utente_id) }}">Profilo</a> · <a href="{{ url_for('miei_tavoli') }}">I miei tavoli</a> · <a href="{{ url_for('preferiti') }}">Preferiti</a> · <a href="{{ url_for('amici') }}">Amici</a> · <a href="{{ url_for('pagina_premium') }}">⭐ Premium</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
             <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo') }}">+ Crea un tavolo</a>
         {% else %}
             <p class="nav-utente"><a href="{{ url_for('accedi') }}">Accedi</a> · <a href="{{ url_for('registrati') }}">Registrati</a></p>
@@ -66,7 +66,7 @@
                         <button type="submit" class="cuore" title="Preferito">{{ '❤️' if t.id in preferiti_ids else '🤍' }}</button>
                     </form>
                     {% endif %}
-                    <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}</h2>
+                    <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if t.esclusivo %} <span class="badge badge-esc">⭐ Esclusivo</span>{% endif %}</h2>
                     <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}
                         {% if t.voti_locale %}<span class="badge badge-grad">👍 {{ t.voti_pos|percento(t.voti_locale) }}%</span>{% endif %}
                     </p>

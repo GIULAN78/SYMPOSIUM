@@ -273,6 +273,9 @@ def init_db():
     """)
 
     aggiungi_colonna(conn, "utenti", "notif_tavoli", "INTEGER DEFAULT 1")
+    aggiungi_colonna(conn, "utenti", "premium", "INTEGER DEFAULT 0")
+    aggiungi_colonna(conn, "tavoli", "esclusivo", "INTEGER DEFAULT 0")
+    esegui(conn, "CREATE TABLE IF NOT EXISTS impostazioni (chiave TEXT PRIMARY KEY, valore TEXT)")
     aggiungi_colonna(conn, "tavoli", "lat", "DOUBLE PRECISION")
     aggiungi_colonna(conn, "tavoli", "lng", "DOUBLE PRECISION")
 
@@ -638,6 +641,62 @@ def info_badge(utente_id):
     }
 
 
+def admin_email():
+    return os.environ.get("ADMIN_EMAIL", "").strip().lower()
+
+
+def pagamento_attivo(conn):
+    r = esegui(conn, "SELECT valore FROM impostazioni WHERE chiave = ?", ("premium_a_pagamento",)).fetchone()
+    return bool(r and r["valore"] == "1")
+
+
+def e_admin(conn, uid):
+    if not uid or not admin_email():
+        return False
+    u = esegui(conn, "SELECT email FROM utenti WHERE id = ?", (uid,)).fetchone()
+    return bool(u and (u["email"] or "").strip().lower() == admin_email())
+
+
+def e_premium(conn, uid):
+    if not uid:
+        return False
+    if not pagamento_attivo(conn):
+        return True
+    u = esegui(conn, "SELECT premium FROM utenti WHERE id = ?", (uid,)).fetchone()
+    if u and u["premium"]:
+        return True
+    return e_admin(conn, uid)
+
+
+@app.context_processor
+def premium_ctx():
+    uid = session.get("utente_id")
+    if not uid:
+        return {"sono_premium": False, "sono_admin": False}
+    conn = get_db()
+    r = {"sono_premium": e_premium(conn, uid), "sono_admin": e_admin(conn, uid)}
+    conn.close()
+    return r
+
+
+@app.before_request
+def riserva_esclusivi():
+    if request.endpoint not in ("dettaglio_tavolo", "iscriviti"):
+        return None
+    try:
+        conn = get_db()
+        r = esegui(conn, "SELECT esclusivo FROM tavoli WHERE id = ?",
+                   ((request.view_args or {}).get("tavolo_id"),)).fetchone()
+        ok = (not r) or (not r["esclusivo"]) or e_premium(conn, session.get("utente_id"))
+        conn.close()
+    except Exception:
+        return None
+    if not ok:
+        flash("Questo tavolo è riservato agli utenti Premium.")
+        return redirect(url_for("pagina_premium"))
+    return None
+
+
 def utente_per_id(conn, utente_id):
     if not utente_id:
         return None
@@ -663,7 +722,7 @@ def home():
     conn = get_db()
     tavoli = esegui(conn, """
         SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.citta, t.foto_url,
-               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng,
+               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng, t.esclusivo,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome,
                u.foto_url AS organizzatore_foto,
@@ -695,6 +754,11 @@ def home():
     oscurati = utenti_oscurati()
     if oscurati:
         tavoli = [t for t in tavoli if t["organizzatore_id"] not in oscurati]
+    conn_p = get_db()
+    premium_ok = e_premium(conn_p, session.get("utente_id"))
+    conn_p.close()
+    if not premium_ok:
+        tavoli = [t for t in tavoli if not t["esclusivo"]]
     if fasce_sel:
         tavoli = [t for t in tavoli if fascia_di(t["data_ora"]) in fasce_sel]
 
@@ -1034,6 +1098,62 @@ def amici():
     """, (uid,)).fetchall()
     conn.close()
     return render_template("amici.html", amici=lista, bloccati=bloccati)
+
+
+@app.route("/premium")
+def pagina_premium():
+    conn = get_db()
+    a_pagamento = pagamento_attivo(conn)
+    conn.close()
+    return render_template("premium.html", a_pagamento=a_pagamento)
+
+
+@app.route("/admin")
+@login_richiesto
+def admin():
+    conn = get_db()
+    if not e_admin(conn, session["utente_id"]):
+        conn.close()
+        abort(403)
+    a_pagamento = pagamento_attivo(conn)
+    utenti = esegui(conn, "SELECT id, nome, email, premium FROM utenti ORDER BY id DESC LIMIT 200").fetchall()
+    conn.close()
+    return render_template("admin.html", a_pagamento=a_pagamento, utenti=utenti)
+
+
+@app.route("/admin/premium", methods=["POST"])
+@login_richiesto
+def admin_premium_toggle():
+    conn = get_db()
+    if not e_admin(conn, session["utente_id"]):
+        conn.close()
+        abort(403)
+    nuovo = "0" if pagamento_attivo(conn) else "1"
+    if esegui(conn, "SELECT chiave FROM impostazioni WHERE chiave = ?", ("premium_a_pagamento",)).fetchone():
+        esegui(conn, "UPDATE impostazioni SET valore = ? WHERE chiave = ?", (nuovo, "premium_a_pagamento"))
+    else:
+        esegui(conn, "INSERT INTO impostazioni (chiave, valore) VALUES (?, ?)", ("premium_a_pagamento", nuovo))
+    conn.commit()
+    conn.close()
+    flash("Premium ora è A PAGAMENTO." if nuovo == "1" else "Premium ora è GRATUITO per tutti.")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/utente/<int:utente_target>/premium", methods=["POST"])
+@login_richiesto
+def admin_utente_premium(utente_target):
+    conn = get_db()
+    if not e_admin(conn, session["utente_id"]):
+        conn.close()
+        abort(403)
+    r = esegui(conn, "SELECT premium FROM utenti WHERE id = ?", (utente_target,)).fetchone()
+    if not r:
+        conn.close()
+        abort(404)
+    esegui(conn, "UPDATE utenti SET premium = ? WHERE id = ?", (0 if r["premium"] else 1, utente_target))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin"))
 
 
 @app.route("/miei-tavoli")
@@ -1563,6 +1683,8 @@ def nuovo_tavolo():
         esegui(conn,
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
+        if request.form.get("esclusivo") == "1" and e_premium(conn, utente_id):
+            esegui(conn, "UPDATE tavoli SET esclusivo = 1 WHERE id = ?", (tavolo_id,))
         try:
             lat = float(request.form.get("lat", ""))
             lng = float(request.form.get("lng", ""))

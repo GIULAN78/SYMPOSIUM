@@ -56,6 +56,9 @@
             <label for="obiettivo">Obiettivo (opzionale)</label>
             <input type="text" id="obiettivo" name="obiettivo" placeholder="Es. Niente smartphone al tavolo">
 
+            {% if sono_premium %}
+            <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Tavolo esclusivo (visibile solo ai Premium)</label>
+            {% endif %}
             <button type="submit" class="btn-nuovo">Crea tavolo</button>
         </form>
     </main>

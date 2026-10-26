@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <div class="card-tavolo">
+            <div class="corpo-card">
+                <h2>⭐ Symposium Premium</h2>
+
+                {% if not a_pagamento %}
+                <p><span class="badge badge-conf">Gratuito per tutti, per ora</span></p>
+                <p>Per il periodo di lancio il Premium è incluso per tutti gli iscritti.</p>
+                {% elif sono_premium %}
+                <p><span class="badge badge-conf">Il tuo account è Premium ✓</span></p>
+                {% else %}
+                <p><span class="badge badge-ass">Il tuo account non è Premium</span></p>
+                <button class="btn-iscriviti" disabled>Passa a Premium (pagamento online in arrivo)</button>
+                {% endif %}
+
+                <p class="etichetta">Cosa include</p>
+                <ul class="lista-stat">
+                    <li>⭐ Creare tavoli <strong>esclusivi</strong>, visibili solo agli utenti Premium</li>
+                    <li>⭐ Iscriversi ai tavoli esclusivi degli altri</li>
+                </ul>
+
+                {% if sono_admin %}
+                <a class="btn-nuovo" href="{{ url_for('admin') }}">⚙️ Pannello Admin</a>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

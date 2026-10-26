@@ -895,3 +895,23 @@ details.segnala form {
     font-size: 0.8rem;
     padding: 0.2rem 0.7rem;
 }
+
+.badge-esc {
+    background: var(--notte);
+    color: var(--oro);
+    vertical-align: middle;
+}
+
+.riga-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.8rem;
+    font-weight: bold;
+    color: var(--notte);
+}
+
+.btn-grande {
+    font-size: 1.05rem;
+    padding: 0.8rem 1.6rem;
+}

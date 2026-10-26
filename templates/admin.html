@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1437">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai tavoli</a>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+
+        <div class="card-tavolo">
+            <div class="corpo-card">
+                <h2>⚙️ Pannello Admin</h2>
+                <p class="etichetta">Premium oggi</p>
+                {% if a_pagamento %}
+                <p><span class="badge badge-ass">A PAGAMENTO</span> Solo i Premium vedono e usano i tavoli esclusivi.</p>
+                <form action="{{ url_for('admin_premium_toggle') }}" method="POST">
+                    <button type="submit" class="btn-nuovo btn-grande">🔓 Torna gratuito per tutti</button>
+                </form>
+                {% else %}
+                <p><span class="badge badge-conf">GRATUITO</span> Tutti hanno il Premium.</p>
+                <form action="{{ url_for('admin_premium_toggle') }}" method="POST"
+                      onsubmit="return confirm('Passare il Premium a pagamento? Da subito solo gli utenti Premium vedranno i tavoli esclusivi.');">
+                    <button type="submit" class="btn-nuovo btn-grande">💳 Passa a pagamento</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <h3 class="titolo-sezione">Utenti ({{ utenti|length }})</h3>
+        <div class="lista-partecipanti">
+            {% for u in utenti %}
+            <div class="partecipante riga-partecipante">
+                <div class="info-part">
+                    <strong>{{ u.nome }}</strong>
+                    <p class="interessi">{{ u.email }}{% if u.premium %} · ⭐ Premium{% endif %}</p>
+                </div>
+                <form action="{{ url_for('admin_utente_premium', utente_target=u.id) }}" method="POST">
+                    <button type="submit" class="btn-piccolo">{{ 'Togli Premium' if u.premium else 'Dai Premium' }}</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>
