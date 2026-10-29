@@ -1166,7 +1166,7 @@ def admin():
     a_pagamento = pagamento_attivo(conn)
     utenti = esegui(conn, "SELECT id, nome, email, premium FROM utenti ORDER BY id DESC LIMIT 200").fetchall()
     conn.close()
-    return render_template("admin.html", a_pagamento=a_pagamento, utenti=utenti, stat=dati_dashboard())
+    return render_template("admin.html", a_pagamento=a_pagamento, utenti=utenti, stat=dati_dashboard(), extra=dati_extra())
 
 
 @app.route("/admin/premium", methods=["POST"])
@@ -1785,6 +1785,79 @@ def conta(conn, tabella, dove="1 = 1", params=()):
     if not tabella_esiste(conn, tabella):
         return 0
     return int(esegui(conn, f"SELECT COUNT(*) AS n FROM {tabella} WHERE {dove}", params).fetchone()["n"])
+
+
+def dati_extra():
+    conn = get_db()
+    oggi = adesso_it().date()
+    giorni = [oggi - timedelta(days=i) for i in range(6, -1, -1)]
+    chiavi = [g.isoformat() for g in giorni]
+    serie = []
+    for etichetta, tabella, colonna in (
+        ("Nuovi utenti", "utenti", "creato_il"),
+        ("Banchetti creati", "tavoli", "creato_il"),
+        ("Posti presi", "iscrizioni", "iscritto_il"),
+        ("Messaggi", "messaggi", "creato_il"),
+    ):
+        conteggi = {k: 0 for k in chiavi}
+        if tabella_esiste(conn, tabella):
+            for r in esegui(conn, f"SELECT {colonna} AS d FROM {tabella} WHERE {colonna} >= ?", (chiavi[0],)).fetchall():
+                k = (r["d"] or "")[:10]
+                if k in conteggi:
+                    conteggi[k] += 1
+        valori = [conteggi[k] for k in chiavi]
+        serie.append({"nome": etichetta, "valori": valori, "max": max(valori + [1]), "totale": sum(valori)})
+
+    eta_fasce = [["18-24", 0], ["25-34", 0], ["35-44", 0], ["45-54", 0], ["55+", 0]]
+    for r in esegui(conn, "SELECT data_nascita FROM utenti").fetchall():
+        e = eta_da(r["data_nascita"])
+        if e is None:
+            continue
+        if e <= 24:
+            eta_fasce[0][1] += 1
+        elif e <= 34:
+            eta_fasce[1][1] += 1
+        elif e <= 44:
+            eta_fasce[2][1] += 1
+        elif e <= 54:
+            eta_fasce[3][1] += 1
+        else:
+            eta_fasce[4][1] += 1
+
+    citta = [
+        [(r["c"] or "").title(), int(r["n"])]
+        for r in esegui(conn, "SELECT LOWER(TRIM(citta)) AS c, COUNT(*) AS n FROM utenti WHERE citta IS NOT NULL AND LENGTH(TRIM(citta)) > 0 GROUP BY LOWER(TRIM(citta)) ORDER BY n DESC LIMIT 8").fetchall()
+    ]
+
+    per_fascia = {f[0]: 0 for f in FASCE}
+    for r in esegui(conn, "SELECT data_ora FROM tavoli").fetchall():
+        f = fascia_di(r["data_ora"])
+        if f in per_fascia:
+            per_fascia[f] += 1
+    fasce = [[f[1], per_fascia[f[0]]] for f in FASCE]
+
+    d = {
+        "serie": serie,
+        "etichette": [g.strftime("%d/%m") for g in giorni],
+        "eta": eta_fasce,
+        "eta_max": max([x[1] for x in eta_fasce] + [1]),
+        "citta": citta,
+        "citta_max": max([x[1] for x in citta] + [1]),
+        "fasce": fasce,
+        "fasce_max": max([x[1] for x in fasce] + [1]),
+        "dei": conta(conn, "tavoli", "esclusivo = 1"),
+        "su_richiesta": conta(conn, "tavoli", "su_richiesta = 1"),
+        "in_attesa": conta(conn, "richieste", "stato = ?", ("attesa",)),
+        "in_coda": conta(conn, "richieste", "stato = ?", ("coda",)),
+        "amici": conta(conn, "amici"),
+        "preferiti": conta(conn, "preferiti"),
+        "seguiti": conta(conn, "locali_seguiti"),
+        "valutazioni": conta(conn, "valutazioni_locale"),
+        "con_wallet": conta(conn, "utenti", "id_alexandria IS NOT NULL"),
+        "annunci": conta(conn, "notifiche", "tipo = ?", ("annuncio",)),
+    }
+    conn.close()
+    return d
 
 
 def dati_dashboard():

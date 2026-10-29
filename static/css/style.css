@@ -1198,3 +1198,36 @@ h1, h2, h3, .titolo-sezione, .etichetta, .badge, .titolo-fasce {
     font-size: 1.1rem;
 }
 /* Fine font classici */
+
+.barra-riga {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.3rem 0;
+    font-size: 0.85rem;
+}
+
+.barra-et {
+    width: 5.2rem;
+    flex-shrink: 0;
+}
+
+.barra-pista {
+    flex: 1;
+    height: 12px;
+    background: rgba(18, 40, 106, 0.15);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.barra-riempi {
+    height: 100%;
+    min-width: 2px;
+    background: var(--oro);
+    border-radius: 6px;
+}
+
+.barra-val {
+    width: 2rem;
+    text-align: right;
+}

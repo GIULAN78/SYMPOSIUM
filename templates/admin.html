@@ -6,9 +6,8 @@
     <title>Pannello di controllo - Symposium</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#123a66">
+    <meta name="theme-color" content="#12286a">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
 </head>
 <body>
     <header>
@@ -25,20 +24,6 @@
 
         <h3 class="titolo-sezione">⚙️ Pannello di controllo Symposium</h3>
 
-        <div class="griglia-stat">
-            <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>
-            <div class="stat-card"><strong>{{ stat.nuovi }}</strong><span>nuovi (7 giorni)</span></div>
-            <div class="stat-card"><strong>{{ stat.premium }}</strong><span>Premium</span></div>
-            <div class="stat-card"><strong>{{ stat.sospesi }}</strong><span>sospesi</span></div>
-            <div class="stat-card"><strong>{{ stat.banchetti }}</strong><span>banchetti</span></div>
-            <div class="stat-card"><strong>{{ stat.in_programma }}</strong><span>in programma</span></div>
-            <div class="stat-card"><strong>{{ stat.conclusi }}</strong><span>conclusi</span></div>
-            <div class="stat-card"><strong>{{ stat.iscrizioni }}</strong><span>posti presi</span></div>
-            <div class="stat-card"><strong>{{ stat.messaggi }}</strong><span>messaggi</span></div>
-            <div class="stat-card"><strong>{{ stat.match }}</strong><span>match</span></div>
-            <div class="stat-card"><strong>{{ stat.segnalazioni }}</strong><span>segnalazioni aperte</span></div>
-        </div>
-
         <div class="card-tavolo">
             <div class="corpo-card">
                 <h2>⭐ Premium</h2>
@@ -54,7 +39,87 @@
                     <button type="submit" class="btn-nuovo btn-grande">💳 Passa a pagamento</button>
                 </form>
                 {% endif %}
+                <p class="nota">Premium assegnati a mano: {{ stat.premium }}</p>
             </div>
+        </div>
+
+        <h3 class="titolo-sezione">Numeri generali</h3>
+        <div class="griglia-stat">
+            <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>
+            <div class="stat-card"><strong>{{ stat.nuovi }}</strong><span>nuovi (7 giorni)</span></div>
+            <div class="stat-card"><strong>{{ stat.sospesi }}</strong><span>sospesi</span></div>
+            <div class="stat-card"><strong>{{ stat.banchetti }}</strong><span>banchetti</span></div>
+            <div class="stat-card"><strong>{{ stat.in_programma }}</strong><span>in programma</span></div>
+            <div class="stat-card"><strong>{{ stat.conclusi }}</strong><span>conclusi</span></div>
+            <div class="stat-card"><strong>{{ stat.iscrizioni }}</strong><span>posti presi</span></div>
+            <div class="stat-card"><strong>{{ stat.messaggi }}</strong><span>messaggi</span></div>
+            <div class="stat-card"><strong>{{ stat.match }}</strong><span>match</span></div>
+            <div class="stat-card"><strong>{{ stat.segnalazioni }}</strong><span>segnalazioni aperte</span></div>
+        </div>
+
+        <h3 class="titolo-sezione">Ultimi 7 giorni</h3>
+        {% for sr in extra.serie %}
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>{{ sr.nome }} <span class="nota">({{ sr.totale }} in totale)</span></h2>
+            {% for v in sr.valori %}
+            <div class="barra-riga">
+                <span class="barra-et">{{ extra.etichette[loop.index0] }}</span>
+                <div class="barra-pista"><div class="barra-riempi" style="width: {{ (v * 100 / sr.max)|int }}%"></div></div>
+                <span class="barra-val">{{ v }}</span>
+            </div>
+            {% endfor %}
+        </div></div>
+        {% endfor %}
+
+        <h3 class="titolo-sezione">Chi sono gli utenti</h3>
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>Età</h2>
+            {% for nome, n in extra.eta %}
+            <div class="barra-riga">
+                <span class="barra-et">{{ nome }}</span>
+                <div class="barra-pista"><div class="barra-riempi" style="width: {{ (n * 100 / extra.eta_max)|int }}%"></div></div>
+                <span class="barra-val">{{ n }}</span>
+            </div>
+            {% endfor %}
+        </div></div>
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>Città più frequenti</h2>
+            {% if not extra.citta %}<p class="nota">Nessun dato.</p>{% endif %}
+            {% for nome, n in extra.citta %}
+            <div class="barra-riga">
+                <span class="barra-et">{{ nome }}</span>
+                <div class="barra-pista"><div class="barra-riempi" style="width: {{ (n * 100 / extra.citta_max)|int }}%"></div></div>
+                <span class="barra-val">{{ n }}</span>
+            </div>
+            {% endfor %}
+        </div></div>
+
+        <h3 class="titolo-sezione">Banchetti</h3>
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>Per fascia oraria</h2>
+            {% for nome, n in extra.fasce %}
+            <div class="barra-riga">
+                <span class="barra-et">{{ nome }}</span>
+                <div class="barra-pista"><div class="barra-riempi" style="width: {{ (n * 100 / extra.fasce_max)|int }}%"></div></div>
+                <span class="barra-val">{{ n }}</span>
+            </div>
+            {% endfor %}
+        </div></div>
+        <div class="griglia-stat">
+            <div class="stat-card"><strong>{{ extra.dei }}</strong><span>banchetti degli dei</span></div>
+            <div class="stat-card"><strong>{{ extra.su_richiesta }}</strong><span>su richiesta</span></div>
+            <div class="stat-card"><strong>{{ extra.in_attesa }}</strong><span>richieste da approvare</span></div>
+            <div class="stat-card"><strong>{{ extra.in_coda }}</strong><span>in lista d'attesa</span></div>
+        </div>
+
+        <h3 class="titolo-sezione">Uso delle funzioni</h3>
+        <div class="griglia-stat">
+            <div class="stat-card"><strong>{{ extra.amici }}</strong><span>amicizie</span></div>
+            <div class="stat-card"><strong>{{ extra.preferiti }}</strong><span>banchetti preferiti</span></div>
+            <div class="stat-card"><strong>{{ extra.seguiti }}</strong><span>locali seguiti</span></div>
+            <div class="stat-card"><strong>{{ extra.valutazioni }}</strong><span>serate valutate</span></div>
+            <div class="stat-card"><strong>{{ extra.con_wallet }}</strong><span>con wallet Alexandria</span></div>
+            <div class="stat-card"><strong>{{ extra.annunci }}</strong><span>annunci inviati</span></div>
         </div>
 
         <div class="card-tavolo">
