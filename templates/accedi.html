@@ -27,6 +27,7 @@
             <input type="password" id="password" name="password" required>
 
             <button type="submit" class="btn-nuovo">Accedi</button>
+            <p class="link-alt"><a href="{{ url_for('password_dimenticata') }}">Password dimenticata?</a></p>
             <p class="link-alt">Non hai un account? <a href="{{ url_for('registrati') }}">Registrati</a></p>
         </form>
     </main>

@@ -372,6 +372,16 @@ def init_db():
     aggiungi_colonna(conn, "utenti", "id_alexandria", "BIGINT")
     aggiungi_colonna(conn, "utenti", "premium_fino", "TEXT")
     esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS reset_password (
+            id {pk},
+            utente_id INTEGER,
+            token_hash TEXT NOT NULL,
+            scade_il TEXT,
+            usato INTEGER DEFAULT 0,
+            creato_il TEXT
+        )
+    """)
+    esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS movimenti_alx (
             id {pk},
             utente_id INTEGER,
@@ -2416,6 +2426,81 @@ def admin_prezzi():
     conn.close()
     flash("Prezzi aggiornati.")
     return redirect(url_for("admin"))
+
+
+@app.route("/password-dimenticata", methods=["GET", "POST"])
+def password_dimenticata():
+    if request.method == "POST":
+        import hashlib
+        import secrets
+        email = request.form.get("email", "").strip().lower()
+        conn = get_db()
+        u = None
+        if email:
+            u = esegui(conn, "SELECT id, nome FROM utenti WHERE LOWER(email) = ?", (email,)).fetchone()
+        if u:
+            ora = adesso_it()
+            recenti = esegui(conn, "SELECT COUNT(*) AS n FROM reset_password WHERE utente_id = ? AND creato_il > ?",
+                             (u["id"], (ora - timedelta(hours=1)).isoformat())).fetchone()["n"]
+            if int(recenti) < 3:
+                token = secrets.token_urlsafe(32)
+                esegui(conn, "INSERT INTO reset_password (utente_id, token_hash, scade_il, usato, creato_il) VALUES (?, ?, ?, 0, ?)",
+                       (u["id"], hashlib.sha256(token.encode()).hexdigest(),
+                        (ora + timedelta(hours=1)).isoformat(), ora.isoformat()))
+                conn.commit()
+                base = request.url_root.rstrip("/")
+                if base.startswith("http://") and "localhost" not in base and "127.0.0.1" not in base:
+                    base = "https://" + base[len("http://"):]
+                link = base + "/reset-password/" + token
+                html = (
+                    '<div style="background:#12286a;padding:28px 14px;font-family:Georgia,serif;">'
+                    '<div style="max-width:520px;margin:0 auto;background:#f6f1e6;border:2px solid #c99a3b;border-radius:14px;padding:24px;color:#12286a;">'
+                    '<h2 style="margin-top:0;letter-spacing:2px;">SYMPOSIUM</h2>'
+                    '<p>Ciao ' + (u["nome"] or "").replace("<", "").replace(">", "") + ', hai chiesto di scegliere una nuova password.</p>'
+                    '<p><a href="' + link + '" style="display:inline-block;background:#12286a;color:#e2c46f;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold;">Scegli la nuova password</a></p>'
+                    '<p style="font-size:13px;">Il link vale un\'ora e si usa una sola volta. Se non sei stato tu, ignora questa email: la tua password resta quella di prima.</p>'
+                    '</div></div>'
+                )
+                api_alexandria("POST", "/symposium/invia-email",
+                               {"destinatario": email, "oggetto": "Symposium: scegli una nuova password", "html": html},
+                               con_chiave=True)
+        conn.close()
+        flash("Se l'email è registrata, riceverai un link per scegliere una nuova password. Controlla anche la posta indesiderata.")
+        return redirect(url_for("password_dimenticata"))
+    return render_template("password_dimenticata.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password_pagina(token):
+    import hashlib
+    th = hashlib.sha256(token.encode()).hexdigest()
+    conn = get_db()
+    r = esegui(conn, "SELECT id, utente_id, scade_il, usato FROM reset_password WHERE token_hash = ?", (th,)).fetchone()
+    valido = bool(r and not r["usato"] and r["scade_il"] and r["scade_il"] > adesso_it().isoformat())
+    if not valido:
+        conn.close()
+        flash("Il link non è valido o è scaduto: richiedine uno nuovo.")
+        return redirect(url_for("password_dimenticata"))
+    if request.method == "POST":
+        nuova = request.form.get("nuova", "")
+        conferma = request.form.get("conferma", "")
+        if len(nuova) < 6:
+            conn.close()
+            flash("La password deve avere almeno 6 caratteri.")
+            return render_template("reset_password.html", token=token)
+        if nuova != conferma:
+            conn.close()
+            flash("Le due password non coincidono.")
+            return render_template("reset_password.html", token=token)
+        esegui(conn, "UPDATE utenti SET password_hash = ? WHERE id = ?",
+               (generate_password_hash(nuova), r["utente_id"]))
+        esegui(conn, "UPDATE reset_password SET usato = 1 WHERE utente_id = ?", (r["utente_id"],))
+        conn.commit()
+        conn.close()
+        flash("Password aggiornata: ora puoi accedere.")
+        return redirect(url_for("accedi"))
+    conn.close()
+    return render_template("reset_password.html", token=token)
 
 
 @app.route("/miei-tavoli")
