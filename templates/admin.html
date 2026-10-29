@@ -55,6 +55,12 @@
             </form>
         </div></div>
 
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>💾 Backup dei dati</h2>
+            <p class="nota">Un file con tutti i dati di Symposium. Contiene anche le email degli utenti: conservalo in un posto privato.</p>
+            <a class="btn-nuovo" href="{{ url_for('admin_backup') }}">Scarica backup</a>
+        </div></div>
+
         <h3 class="titolo-sezione">Numeri generali</h3>
         <div class="griglia-stat">
             <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>

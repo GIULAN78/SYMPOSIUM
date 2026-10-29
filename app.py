@@ -2503,6 +2503,35 @@ def reset_password_pagina(token):
     return render_template("reset_password.html", token=token)
 
 
+TABELLE_BACKUP = (
+    "utenti", "locali", "tavoli", "iscrizioni", "messaggi", "valutazioni_locale",
+    "valutazioni_criteri", "presenze", "compatibilita", "assenze", "notifiche",
+    "preferiti", "locali_seguiti", "richieste", "amici", "bloccati", "segnalazioni",
+    "messaggi_privati", "preferiti_utenti", "impostazioni", "movimenti_alx",
+)
+
+
+@app.route("/admin/backup")
+@solo_admin
+def admin_backup():
+    import json
+    from flask import Response
+    conn = get_db()
+    dati = {"creato_il": adesso_it().isoformat(), "tabelle": {}}
+    for nome in TABELLE_BACKUP:
+        if tabella_esiste(conn, nome):
+            righe = esegui(conn, f"SELECT * FROM {nome}").fetchall()
+            dati["tabelle"][nome] = [dict(r) for r in righe]
+    conn.close()
+    contenuto = json.dumps(dati, ensure_ascii=False, indent=1, default=str)
+    nome_file = "symposium-backup-" + adesso_it().strftime("%Y%m%d") + ".json"
+    return Response(
+        contenuto,
+        mimetype="application/json",
+        headers={"Content-Disposition": "attachment; filename=" + nome_file},
+    )
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
