@@ -371,6 +371,15 @@ def init_db():
     aggiungi_colonna(conn, "utenti", "sospeso", "INTEGER DEFAULT 0")
     aggiungi_colonna(conn, "utenti", "id_alexandria", "BIGINT")
     aggiungi_colonna(conn, "utenti", "premium_fino", "TEXT")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS movimenti_alx (
+            id {pk},
+            utente_id INTEGER,
+            tipo TEXT,
+            importo INTEGER NOT NULL,
+            creato_il TEXT
+        )
+    """)
     aggiungi_colonna(conn, "segnalazioni", "gestita", "INTEGER DEFAULT 0")
 
     conn.commit()
@@ -1790,6 +1799,12 @@ def conta(conn, tabella, dove="1 = 1", params=()):
     return int(esegui(conn, f"SELECT COUNT(*) AS n FROM {tabella} WHERE {dove}", params).fetchone()["n"])
 
 
+def alx_somma(conn, dove="1 = 1", params=()):
+    if not tabella_esiste(conn, "movimenti_alx"):
+        return 0
+    return int(esegui(conn, f"SELECT COALESCE(SUM(importo), 0) AS n FROM movimenti_alx WHERE {dove}", params).fetchone()["n"])
+
+
 def dati_extra():
     conn = get_db()
     oggi = adesso_it().date()
@@ -1839,6 +1854,10 @@ def dati_extra():
             per_fascia[f] += 1
     fasce = [[f[1], per_fascia[f[0]]] for f in FASCE]
 
+    sette_giorni = (adesso_it() - timedelta(days=7)).isoformat()
+    paganti = 0
+    if tabella_esiste(conn, "movimenti_alx"):
+        paganti = int(esegui(conn, "SELECT COUNT(DISTINCT utente_id) AS n FROM movimenti_alx").fetchone()["n"])
     d = {
         "serie": serie,
         "etichette": [g.strftime("%d/%m") for g in giorni],
@@ -1858,6 +1877,12 @@ def dati_extra():
         "valutazioni": conta(conn, "valutazioni_locale"),
         "con_wallet": conta(conn, "utenti", "id_alexandria IS NOT NULL"),
         "annunci": conta(conn, "notifiche", "tipo = ?", ("annuncio",)),
+        "alx_totale": alx_somma(conn),
+        "alx_7g": alx_somma(conn, "creato_il >= ?", (sette_giorni,)),
+        "alx_premium": alx_somma(conn, "tipo = ?", ("premium",)),
+        "alx_dei": alx_somma(conn, "tipo = ?", ("banchetto_dei",)),
+        "alx_paganti": paganti,
+        "premium_attivi": conta(conn, "utenti", "premium_fino > ?", (adesso_it().isoformat(),)),
     }
     conn.close()
     return d
@@ -2299,7 +2324,7 @@ def salva_prezzo_alx(conn, chiave, valore):
         esegui(conn, "INSERT INTO impostazioni (chiave, valore) VALUES (?, ?)", (chiave, str(valore)))
 
 
-def spendi_alx(conn, uid, importo):
+def spendi_alx(conn, uid, importo, tipo="altro"):
     if e_admin(conn, uid):
         return True, ""
     u = utente_per_id(conn, uid)
@@ -2308,6 +2333,8 @@ def spendi_alx(conn, uid, importo):
     st, d = api_alexandria("POST", "/symposium/spendi",
                            {"id_telegram": int(u["id_alexandria"]), "importo": int(importo)}, con_chiave=True)
     if st == 200 and d and d.get("ok"):
+        esegui(conn, "INSERT INTO movimenti_alx (utente_id, tipo, importo, creato_il) VALUES (?, ?, ?, ?)",
+               (uid, tipo, int(importo), adesso_it().isoformat()))
         return True, ""
     if st == 400:
         return False, "Saldo ALX insufficiente: puoi acquistarne dal Wallet ALX."
@@ -2350,7 +2377,7 @@ def premium_acquista():
         return redirect(url_for("pagina_premium"))
     costo = prezzo_alx(conn, "prezzo_premium_mensile", 1000)
     if costo > 0:
-        ok, msg = spendi_alx(conn, uid, costo)
+        ok, msg = spendi_alx(conn, uid, costo, "premium")
         if not ok:
             conn.close()
             flash(msg)
@@ -2918,7 +2945,7 @@ def nuovo_tavolo():
                 return render_template("nuovo_tavolo.html")
             costo_dei = prezzo_alx(conn, "prezzo_banchetto_dei", 200)
             if costo_dei > 0:
-                ok_spesa, msg_spesa = spendi_alx(conn, utente_id, costo_dei)
+                ok_spesa, msg_spesa = spendi_alx(conn, utente_id, costo_dei, "banchetto_dei")
                 if not ok_spesa:
                     conn.close()
                     flash(msg_spesa)
