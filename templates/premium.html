@@ -30,15 +30,22 @@
                 <p>Per il periodo di lancio il Premium è incluso per tutti gli iscritti.</p>
                 {% elif sono_premium %}
                 <p><span class="badge badge-conf">Il tuo account è Premium ✓</span></p>
+                {% if premium_fino %}<p>Attivo fino al <strong>{{ premium_fino }}</strong>.</p>{% endif %}
+                <form action="{{ url_for('premium_acquista') }}" method="POST">
+                    <button type="submit" class="btn-nuovo">Rinnova per 30 giorni · {{ prezzo_premium }} ALX</button>
+                </form>
                 {% else %}
                 <p><span class="badge badge-ass">Il tuo account non è Premium</span></p>
-                <button class="btn-iscriviti" disabled>Passa a Premium (pagamento online in arrivo)</button>
+                <form action="{{ url_for('premium_acquista') }}" method="POST">
+                    <button type="submit" class="btn-nuovo">Attiva il Premium · {{ prezzo_premium }} ALX per 30 giorni</button>
+                </form>
                 {% endif %}
+                {% if a_pagamento %}<p class="nota">Si paga in ALX, gli stessi token di Alexandria. <a href="{{ url_for('wallet') }}">Apri il Wallet ALX</a> per vedere il saldo o acquistarne.</p>{% endif %}
 
                 <p class="etichetta">Cosa include</p>
                 <ul class="lista-stat">
-                    <li>⭐ Creare <strong>banchetti degli dei</strong>, riservati agli utenti Premium</li>
-                    <li>⭐ Sedere ai banchetti degli dei organizzati da altri</li>
+                    <li>⭐ Vedere i <strong>banchetti degli dei</strong> e prendere posto</li>
+                    <li>⭐ Crearne di tuoi: {% if a_pagamento %}{{ prezzo_dei }} ALX per ogni banchetto degli dei{% else %}gratis per ora{% endif %}</li>
                 </ul>
 
                 {% if sono_admin %}

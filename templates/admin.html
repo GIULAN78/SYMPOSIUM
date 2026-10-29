@@ -43,6 +43,18 @@
             </div>
         </div>
 
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>💰 Prezzi in ALX</h2>
+            <p class="nota">Valgono solo quando il Premium è a pagamento.</p>
+            <form class="form-tavolo form-nobordo" method="POST" action="{{ url_for('admin_prezzi') }}">
+                <label for="prezzo_premium">Premium, 30 giorni</label>
+                <input type="number" id="prezzo_premium" name="prezzo_premium" min="0" max="100000" value="{{ prezzo_premium }}" required>
+                <label for="prezzo_dei">Creare un banchetto degli dei</label>
+                <input type="number" id="prezzo_dei" name="prezzo_dei" min="0" max="100000" value="{{ prezzo_dei }}" required>
+                <button type="submit" class="btn-nuovo">Salva prezzi</button>
+            </form>
+        </div></div>
+
         <h3 class="titolo-sezione">Numeri generali</h3>
         <div class="griglia-stat">
             <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>

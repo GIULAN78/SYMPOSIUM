@@ -58,7 +58,7 @@
             <input type="text" id="obiettivo" name="obiettivo" placeholder="Es. Niente smartphone al banchetto">
 
             {% if sono_premium %}
-            <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Banchetto degli dei (riservato ai Premium)</label>
+            <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Banchetto degli dei (riservato ai Premium) {% if pag_attivo %}· costa {{ prezzo_dei }} ALX{% else %}· gratis per ora{% endif %}</label>
             {% endif %}
             <label class="riga-check"><input type="checkbox" name="su_richiesta" value="1"> 🔒 Su richiesta (approvo io chi partecipa)</label>
             <button type="submit" class="btn-nuovo">Crea banchetto</button>

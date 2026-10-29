@@ -370,6 +370,7 @@ def init_db():
 
     aggiungi_colonna(conn, "utenti", "sospeso", "INTEGER DEFAULT 0")
     aggiungi_colonna(conn, "utenti", "id_alexandria", "BIGINT")
+    aggiungi_colonna(conn, "utenti", "premium_fino", "TEXT")
     aggiungi_colonna(conn, "segnalazioni", "gestita", "INTEGER DEFAULT 0")
 
     conn.commit()
@@ -695,8 +696,10 @@ def e_premium(conn, uid):
         return False
     if not pagamento_attivo(conn):
         return True
-    u = esegui(conn, "SELECT premium FROM utenti WHERE id = ?", (uid,)).fetchone()
+    u = esegui(conn, "SELECT premium, premium_fino FROM utenti WHERE id = ?", (uid,)).fetchone()
     if u and u["premium"]:
+        return True
+    if u and u["premium_fino"] and u["premium_fino"] > adesso_it().isoformat():
         return True
     return e_admin(conn, uid)
 
@@ -2281,6 +2284,113 @@ def popup_posizione(risposta):
     return risposta
 
 
+def prezzo_alx(conn, chiave, predefinito):
+    r = esegui(conn, "SELECT valore FROM impostazioni WHERE chiave = ?", (chiave,)).fetchone()
+    try:
+        return int(r["valore"]) if r else predefinito
+    except (TypeError, ValueError):
+        return predefinito
+
+
+def salva_prezzo_alx(conn, chiave, valore):
+    if esegui(conn, "SELECT chiave FROM impostazioni WHERE chiave = ?", (chiave,)).fetchone():
+        esegui(conn, "UPDATE impostazioni SET valore = ? WHERE chiave = ?", (str(valore), chiave))
+    else:
+        esegui(conn, "INSERT INTO impostazioni (chiave, valore) VALUES (?, ?)", (chiave, str(valore)))
+
+
+def spendi_alx(conn, uid, importo):
+    if e_admin(conn, uid):
+        return True, ""
+    u = utente_per_id(conn, uid)
+    if not u or not u["id_alexandria"]:
+        return False, "Per pagare in ALX collega prima il tuo account Alexandria dal Wallet ALX."
+    st, d = api_alexandria("POST", "/symposium/spendi",
+                           {"id_telegram": int(u["id_alexandria"]), "importo": int(importo)}, con_chiave=True)
+    if st == 200 and d and d.get("ok"):
+        return True, ""
+    if st == 400:
+        return False, "Saldo ALX insufficiente: puoi acquistarne dal Wallet ALX."
+    if st == 403:
+        return False, "Il tuo account Alexandria è sospeso: non puoi spendere ALX."
+    return False, "Non riesco a contattare Alexandria: riprova tra qualche secondo."
+
+
+@app.context_processor
+def prezzi_ctx():
+    if request.endpoint not in ("admin", "pagina_premium", "nuovo_tavolo"):
+        return {}
+    conn = get_db()
+    d = {
+        "prezzo_premium": prezzo_alx(conn, "prezzo_premium_mensile", 1000),
+        "prezzo_dei": prezzo_alx(conn, "prezzo_banchetto_dei", 200),
+        "pag_attivo": pagamento_attivo(conn),
+        "premium_fino": None,
+    }
+    uid = session.get("utente_id")
+    if uid:
+        r = esegui(conn, "SELECT premium_fino FROM utenti WHERE id = ?", (uid,)).fetchone()
+        if r and r["premium_fino"] and r["premium_fino"] > adesso_it().isoformat():
+            try:
+                d["premium_fino"] = datetime.fromisoformat(r["premium_fino"]).strftime("%d/%m/%Y")
+            except ValueError:
+                pass
+    conn.close()
+    return d
+
+
+@app.route("/premium/acquista", methods=["POST"])
+@login_richiesto
+def premium_acquista():
+    uid = session["utente_id"]
+    conn = get_db()
+    if not pagamento_attivo(conn):
+        conn.close()
+        flash("Il Premium è gratuito per tutti, per ora.")
+        return redirect(url_for("pagina_premium"))
+    costo = prezzo_alx(conn, "prezzo_premium_mensile", 1000)
+    if costo > 0:
+        ok, msg = spendi_alx(conn, uid, costo)
+        if not ok:
+            conn.close()
+            flash(msg)
+            return redirect(url_for("pagina_premium"))
+    r = esegui(conn, "SELECT premium_fino FROM utenti WHERE id = ?", (uid,)).fetchone()
+    base = adesso_it()
+    if r and r["premium_fino"] and r["premium_fino"] > base.isoformat():
+        try:
+            base = datetime.fromisoformat(r["premium_fino"])
+        except ValueError:
+            pass
+    nuova = base + timedelta(days=30)
+    esegui(conn, "UPDATE utenti SET premium_fino = ? WHERE id = ?", (nuova.isoformat(), uid))
+    conn.commit()
+    conn.close()
+    flash("Premium attivo fino al " + nuova.strftime("%d/%m/%Y") + ".")
+    return redirect(url_for("pagina_premium"))
+
+
+@app.route("/admin/prezzi", methods=["POST"])
+@solo_admin
+def admin_prezzi():
+    try:
+        pp = int(request.form.get("prezzo_premium", ""))
+        pd = int(request.form.get("prezzo_dei", ""))
+    except ValueError:
+        flash("Inserisci due numeri interi.")
+        return redirect(url_for("admin"))
+    if not (0 <= pp <= 100000 and 0 <= pd <= 100000):
+        flash("I prezzi devono essere tra 0 e 100000 ALX.")
+        return redirect(url_for("admin"))
+    conn = get_db()
+    salva_prezzo_alx(conn, "prezzo_premium_mensile", pp)
+    salva_prezzo_alx(conn, "prezzo_banchetto_dei", pd)
+    conn.commit()
+    conn.close()
+    flash("Prezzi aggiornati.")
+    return redirect(url_for("admin"))
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -2801,6 +2911,18 @@ def nuovo_tavolo():
             locale_id = inserisci(conn, "INSERT INTO locali (nome, indirizzo) VALUES (?, ?)", (locale_nome, ""))
 
         utente_id = session["utente_id"]
+        if request.form.get("esclusivo") == "1" and pagamento_attivo(conn) and not e_admin(conn, utente_id):
+            if not e_premium(conn, utente_id):
+                conn.close()
+                flash("I banchetti degli dei sono riservati agli utenti Premium: attiva il Premium dalla pagina Premium.")
+                return render_template("nuovo_tavolo.html")
+            costo_dei = prezzo_alx(conn, "prezzo_banchetto_dei", 200)
+            if costo_dei > 0:
+                ok_spesa, msg_spesa = spendi_alx(conn, utente_id, costo_dei)
+                if not ok_spesa:
+                    conn.close()
+                    flash(msg_spesa)
+                    return render_template("nuovo_tavolo.html")
         tavolo_id = inserisci(conn, """
             INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali,
                                 creato_il, citta, descrizione, min_partecipanti, eta_min, eta_max, foto_url)
