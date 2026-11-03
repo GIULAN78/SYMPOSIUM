@@ -371,6 +371,16 @@ def init_db():
     aggiungi_colonna(conn, "utenti", "sospeso", "INTEGER DEFAULT 0")
     aggiungi_colonna(conn, "utenti", "id_alexandria", "BIGINT")
     aggiungi_colonna(conn, "utenti", "premium_fino", "TEXT")
+    aggiungi_colonna(conn, "utenti", "banner_nascosto_fino", "TEXT")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS feedback_app (
+            id {pk},
+            utente_id INTEGER,
+            risposta TEXT NOT NULL,
+            testo TEXT,
+            creato_il TEXT
+        )
+    """)
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS reset_password (
             id {pk},
@@ -1318,6 +1328,8 @@ def elimina_account():
         "DELETE FROM richieste WHERE utente_id = ?",
         "DELETE FROM preferiti_utenti WHERE utente_id = ? OR salvato_id = ?",
         "DELETE FROM messaggi_privati WHERE da_utente = ? OR a_utente = ?",
+        "DELETE FROM feedback_app WHERE utente_id = ?",
+        "DELETE FROM reset_password WHERE utente_id = ?",
         "DELETE FROM iscrizioni WHERE utente_id = ?",
         "DELETE FROM utenti WHERE id = ?",
     ):
@@ -1943,6 +1955,8 @@ PULIZIA_UTENTE = (
     ("messaggi_privati", "da_utente = ? OR a_utente = ?"),
     ("segnalazioni", "da_utente = ? OR utente_id = ?"),
     ("notifiche", "utente_id = ? OR da_utente = ?"),
+    ("feedback_app", "utente_id = ?"),
+    ("reset_password", "utente_id = ?"),
     ("iscrizioni", "utente_id = ?"),
 )
 
@@ -2530,6 +2544,93 @@ def admin_backup():
         mimetype="application/json",
         headers={"Content-Disposition": "attachment; filename=" + nome_file},
     )
+
+
+@app.after_request
+def banner_gradimento(risposta):
+    try:
+        if (
+            "utente_id" not in session
+            or risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint != "home"
+        ):
+            return risposta
+        ora = adesso_it()
+        conn = get_db()
+        u = esegui(conn, "SELECT creato_il, banner_nascosto_fino FROM utenti WHERE id = ?",
+                   (session["utente_id"],)).fetchone()
+        forza = request.args.get("gradimento") == "1" and e_admin(conn, session["utente_id"])
+        conn.close()
+        if not u:
+            return risposta
+        if not forza:
+            if u["banner_nascosto_fino"] and u["banner_nascosto_fino"] > ora.isoformat():
+                return risposta
+            if not u["creato_il"] or u["creato_il"] > (ora - timedelta(days=2)).isoformat():
+                return risposta
+        testo = risposta.get_data(as_text=True)
+        if "</body>" in testo:
+            html = render_template("_gradimento.html", store=os.environ.get("PLAYSTORE_URL", "").strip())
+            risposta.set_data(testo.replace("</body>", html + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
+
+
+@app.route("/gradimento/risposta", methods=["POST"])
+@login_richiesto
+def gradimento_risposta():
+    dati = request.get_json(silent=True) or {}
+    r = dati.get("risposta")
+    if r not in ("adoro", "cosi", "no", "dopo"):
+        abort(400)
+    ora = adesso_it()
+    giorni = 14 if r == "dopo" else 180
+    conn = get_db()
+    if r != "dopo":
+        esegui(conn, "INSERT INTO feedback_app (utente_id, risposta, creato_il) VALUES (?, ?, ?)",
+               (session["utente_id"], r, ora.isoformat()))
+    esegui(conn, "UPDATE utenti SET banner_nascosto_fino = ? WHERE id = ?",
+           ((ora + timedelta(days=giorni)).isoformat(), session["utente_id"]))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/gradimento/testo", methods=["POST"])
+@login_richiesto
+def gradimento_testo():
+    dati = request.get_json(silent=True) or {}
+    testo = str(dati.get("testo", "")).strip()[:1000]
+    if not testo:
+        return jsonify({"ok": False})
+    conn = get_db()
+    r = esegui(conn, "SELECT id FROM feedback_app WHERE utente_id = ? ORDER BY id DESC LIMIT 1",
+               (session["utente_id"],)).fetchone()
+    if r:
+        esegui(conn, "UPDATE feedback_app SET testo = ? WHERE id = ?", (testo, r["id"]))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/admin/feedback")
+@solo_admin
+def admin_feedback():
+    conn = get_db()
+    conteggi = {"adoro": 0, "cosi": 0, "no": 0}
+    for r in esegui(conn, "SELECT risposta, COUNT(*) AS n FROM feedback_app GROUP BY risposta").fetchall():
+        if r["risposta"] in conteggi:
+            conteggi[r["risposta"]] = int(r["n"])
+    righe = esegui(conn, """
+        SELECT f.risposta, f.testo, f.creato_il, u.nome
+        FROM feedback_app f LEFT JOIN utenti u ON u.id = f.utente_id
+        WHERE f.testo IS NOT NULL AND LENGTH(f.testo) > 0
+        ORDER BY f.id DESC LIMIT 100
+    """).fetchall()
+    conn.close()
+    return render_template("admin_feedback.html", conteggi=conteggi, commenti=righe)
 
 
 @app.route("/miei-tavoli")

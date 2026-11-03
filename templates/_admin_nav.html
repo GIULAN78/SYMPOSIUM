@@ -4,5 +4,6 @@
     <a class="{{ 'attivo' if e == 'admin_utenti' else '' }}" href="{{ url_for('admin_utenti') }}">👥 Utenti</a>
     <a class="{{ 'attivo' if e == 'admin_banchetti' else '' }}" href="{{ url_for('admin_banchetti') }}">🍽️ Banchetti</a>
     <a class="{{ 'attivo' if e == 'admin_segnalazioni' else '' }}" href="{{ url_for('admin_segnalazioni') }}">🚩 Segnalazioni</a>
+    <a class="{{ 'attivo' if e == 'admin_feedback' else '' }}" href="{{ url_for('admin_feedback') }}">⭐ Gradimento</a>
     {% if immagini_ok %}<a href="{{ url_for('immagini_sito') }}">🖼️ Immagini</a>{% endif %}
 </div>

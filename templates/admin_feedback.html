@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gradimento - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#12286a">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('admin') }}">← Pannello di controllo</a>
+    </header>
+
+    <main>
+        {% include "_admin_nav.html" %}
+
+        <h3 class="titolo-sezione">⭐ Gradimento</h3>
+        <div class="griglia-stat">
+            <div class="stat-card"><strong>{{ conteggi.adoro }}</strong><span>😍 la adorano</span></div>
+            <div class="stat-card"><strong>{{ conteggi.cosi }}</strong><span>🙂 così così</span></div>
+            <div class="stat-card"><strong>{{ conteggi.no }}</strong><span>😕 per niente</span></div>
+        </div>
+
+        <h3 class="titolo-sezione">Commenti ({{ commenti|length }})</h3>
+        {% if not commenti %}<p class="vuoto">Nessun commento per ora.</p>{% endif %}
+        <div class="lista-partecipanti">
+            {% for c in commenti %}
+            <div class="partecipante">
+                <strong>{{ c.nome or 'Utente eliminato' }}</strong>
+                <span class="badge {{ 'badge-ass' if c.risposta == 'no' else '' }}">{{ {'adoro': '😍', 'cosi': '🙂', 'no': '😕'}[c.risposta] }}</span>
+                <p class="descrizione">{{ c.testo }}</p>
+                <p class="interessi">{{ c.creato_il|data_it }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>
