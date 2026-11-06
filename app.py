@@ -962,27 +962,55 @@ TIPI_LOCALE = [
 ]
 
 
-def cerca_locali(nome, citta, tipo):
+ENDPOINT_OVERPASS = (
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+)
+
+
+def chiama_overpass(query):
     import json
+    import urllib.error
     import urllib.parse
     import urllib.request
+    ultimo = "nessuna risposta"
+    for url in ENDPOINT_OVERPASS:
+        host = urllib.parse.urlparse(url).hostname
+        try:
+            dati = urllib.parse.urlencode({"data": query}).encode()
+            richiesta = urllib.request.Request(
+                url, data=dati,
+                headers={"User-Agent": "Symposium/1.0 (social eating app)"})
+            with urllib.request.urlopen(richiesta, timeout=9) as r:
+                return json.loads(r.read().decode()), None
+        except urllib.error.HTTPError as e:
+            ultimo = "errore " + str(e.code) + " da " + str(host)
+        except Exception as e:
+            ultimo = type(e).__name__ + " da " + str(host)
+    return None, ultimo
+
+
+def cerca_locali(nome, citta, tipo):
     amenity = next((t[2] for t in TIPI_LOCALE if t[0] == tipo), TIPI_LOCALE[0][2])
-    filtro_nome = f'["name"~"{nome}",i]' if nome else '["name"]'
-    query = (
-        "[out:json][timeout:20];"
-        f'area["name"~"^{citta}$",i]["boundary"="administrative"]["admin_level"="8"]->.a;'
-        f'nwr["amenity"~"^({amenity})$"]{filtro_nome}(area.a);'
-        "out center 80;"
-    )
-    try:
-        dati = urllib.parse.urlencode({"data": query}).encode()
-        req = urllib.request.Request(
-            "https://overpass-api.de/api/interpreter", data=dati,
-            headers={"User-Agent": "Symposium/1.0 (social eating app)"})
-        with urllib.request.urlopen(req, timeout=22) as r:
-            risposta = json.loads(r.read().decode())
-    except Exception:
-        return [], "Il servizio di ricerca non risponde, riprova tra poco."
+    filtro_nome = '["name"~"' + nome + '",i]' if nome else '["name"]'
+
+    def costruisci(livello):
+        return (
+            "[out:json][timeout:8];"
+            'area["name"~"^' + citta + '$",i]["boundary"="administrative"]' + livello + "->.a;"
+            'nwr["amenity"~"^(' + amenity + ')$"]' + filtro_nome + "(area.a);"
+            "out center 80;"
+        )
+
+    risposta, errore = None, None
+    for livello in ('["admin_level"="8"]', ""):
+        risposta, errore = chiama_overpass(costruisci(livello))
+        if risposta is None or risposta.get("elements"):
+            break
+
+    if risposta is None:
+        return [], "Il servizio di ricerca non risponde (" + str(errore) + "). Riprova tra poco."
 
     visti = set()
     risultati = []
@@ -1008,7 +1036,7 @@ def cerca_locali(nome, citta, tipo):
         })
     risultati.sort(key=lambda x: x["nome"].lower())
     if not risultati:
-        return [], "Nessun locale trovato: controlla il nome della città (comune)."
+        return [], "Nessun locale trovato a " + citta + ": prova a togliere il nome del locale o a cambiare il tipo."
     return risultati, None
 
 
