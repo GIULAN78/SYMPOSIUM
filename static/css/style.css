@@ -1284,3 +1284,16 @@ header::after {
     background: #d6335a;
 }
 /* Fine tema vivace */
+
+/* Tipologie */
+.form-tavolo select {
+    width: 100%;
+    padding: 0.55rem;
+    border-radius: 8px;
+    border: 2px solid var(--oro);
+    background: #fffdf6;
+    color: var(--testo);
+    font-family: inherit;
+    font-weight: 700;
+    box-sizing: border-box;
+}

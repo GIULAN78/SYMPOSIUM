@@ -6,6 +6,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from zoneinfo import ZoneInfo
 import sqlite3
 import os
+from tipologie import GRUPPI as GRUPPI_TIPOLOGIE, TIPOLOGIE_PER_SLUG
 import io
 import uuid
 from datetime import datetime, date, timedelta
@@ -195,6 +196,7 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "eta_min", "INTEGER")
     aggiungi_colonna(conn, "tavoli", "eta_max", "INTEGER")
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
+    aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS iscrizioni (
@@ -2661,6 +2663,11 @@ def admin_feedback():
     return render_template("admin_feedback.html", conteggi=conteggi, commenti=righe)
 
 
+@app.context_processor
+def tipologie_ctx():
+    return {"GRUPPI_TIPOLOGIE": GRUPPI_TIPOLOGIE, "TIPOLOGIE_PER_SLUG": TIPOLOGIE_PER_SLUG}
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -3163,6 +3170,11 @@ def nuovo_tavolo():
         minimo = int(request.form.get("min_partecipanti", 2))
         eta_min = int(request.form.get("eta_min", 18))
         eta_max = int(request.form.get("eta_max", 65))
+        tipologia = request.form.get("tipologia", "")
+        if tipologia not in TIPOLOGIE_PER_SLUG:
+            flash("Scegli la tipologia del banchetto.")
+            return render_template("nuovo_tavolo.html")
+        esclusivo_sel = request.form.get("esclusivo") == "1" or TIPOLOGIE_PER_SLUG[tipologia]["esclusiva"]
 
         if minimo > posti:
             flash("Il minimo di partecipanti non può superare i posti disponibili.")
@@ -3181,7 +3193,7 @@ def nuovo_tavolo():
             locale_id = inserisci(conn, "INSERT INTO locali (nome, indirizzo) VALUES (?, ?)", (locale_nome, ""))
 
         utente_id = session["utente_id"]
-        if request.form.get("esclusivo") == "1" and pagamento_attivo(conn) and not e_admin(conn, utente_id):
+        if esclusivo_sel and pagamento_attivo(conn) and not e_admin(conn, utente_id):
             if not e_premium(conn, utente_id):
                 conn.close()
                 flash("I banchetti degli dei sono riservati agli utenti Premium: attiva il Premium dalla pagina Premium.")
@@ -3202,9 +3214,10 @@ def nuovo_tavolo():
         esegui(conn,
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
+        esegui(conn, "UPDATE tavoli SET tipologia = ? WHERE id = ?", (tipologia, tavolo_id))
         if request.form.get("su_richiesta") == "1":
             esegui(conn, "UPDATE tavoli SET su_richiesta = 1 WHERE id = ?", (tavolo_id,))
-        if request.form.get("esclusivo") == "1" and e_premium(conn, utente_id):
+        if esclusivo_sel and e_premium(conn, utente_id):
             esegui(conn, "UPDATE tavoli SET esclusivo = 1 WHERE id = ?", (tavolo_id,))
         try:
             lat = float(request.form.get("lat", ""))

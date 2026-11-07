@@ -23,6 +23,16 @@
         <form class="form-tavolo" method="POST" action="{{ url_for('nuovo_tavolo') }}" enctype="multipart/form-data">
             <label for="tema">Tema del banchetto</label>
             <input type="text" id="tema" name="tema" placeholder="Es. Cena tra appassionati di storia" required>
+            <label for="tipologia">Tipologia del banchetto *</label>
+            <select id="tipologia" name="tipologia" required>
+                <option value="">Scegli la tipologia...</option>
+                {% for gruppo, elenco in GRUPPI_TIPOLOGIE %}
+                <optgroup label="{{ gruppo }}">
+                    {% for t in elenco %}<option value="{{ t.slug }}" data-dei="{{ 1 if t.esclusiva else 0 }}" data-descr="{{ t.descrizione }}">{{ t.emoji }} {{ t.nome }}</option>{% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+            <p class="nota" id="descr-tipologia"></p>
 
             <label for="foto">Foto del locale o del piatto (opzionale)</label>
             <input type="file" id="foto" name="foto" accept="image/*">
@@ -66,5 +76,18 @@
     </main>
 <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
 <script src="/static/js/citta.js" defer></script>
+<script>
+(function () {
+    var s = document.getElementById("tipologia");
+    if (!s) { return; }
+    var d = document.getElementById("descr-tipologia");
+    var chk = document.querySelector('input[name="esclusivo"]');
+    s.addEventListener("change", function () {
+        var o = s.options[s.selectedIndex];
+        d.textContent = o.getAttribute("data-descr") || "";
+        if (chk && o.getAttribute("data-dei") === "1") { chk.checked = true; }
+    });
+})();
+</script>
 </body>
 </html>
