@@ -197,6 +197,12 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "eta_max", "INTEGER")
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
+    esegui(conn, """
+        CREATE TABLE IF NOT EXISTS immagini_tipologie (
+            slug TEXT PRIMARY KEY,
+            url TEXT
+        )
+    """)
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS iscrizioni (
@@ -682,19 +688,19 @@ def info_badge(utente_id):
 
     badge = []
     if serate >= 5:
-        badge.append({"nome": "Tabler+", "classe": "tablerplus", "icona": "🔵"})
+        badge.append({"nome": "Convitato", "classe": "tablerplus", "icona": "🔵"})
     elif serate >= 1:
-        badge.append({"nome": "Tabler", "classe": "tabler", "icona": "🟠"})
+        badge.append({"nome": "Commensale", "classe": "tabler", "icona": "🟠"})
     if organizzate >= 3:
-        badge.append({"nome": "Event Manager", "classe": "manager", "icona": "🟣"})
+        badge.append({"nome": "Simposiarca", "classe": "manager", "icona": "🟣"})
 
     prossimi = []
     if serate < 1:
-        prossimi.append("Partecipa alla tua prima serata per ottenere il badge Tabler")
+        prossimi.append("Partecipa alla tua prima serata per ottenere il grado di Commensale")
     elif serate < 5:
-        prossimi.append(f"Ancora {5 - serate} serate per il badge Tabler+")
+        prossimi.append(f"Ancora {5 - serate} serate per il grado di Convitato")
     if organizzate < 3:
-        prossimi.append(f"Ancora {3 - organizzate} serate organizzate per il badge Event Manager")
+        prossimi.append(f"Ancora {3 - organizzate} serate organizzate per il grado di Simposiarca")
 
     principale = badge[-1] if badge else None
     return {
@@ -785,11 +791,12 @@ def home():
     solo_confermati = request.args.get("confermati") == "1"
     fasce_valide = {f[0] for f in FASCE}
     fasce_sel = [f for f in request.args.getlist("fascia") if f in fasce_valide]
+    tip_sel = request.args.get("tipologia", "")
 
     conn = get_db()
     tavoli = esegui(conn, """
         SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.citta, t.foto_url,
-               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng, t.esclusivo, t.su_richiesta,
+               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng, t.esclusivo, t.su_richiesta, t.tipologia,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome,
                u.foto_url AS organizzatore_foto,
@@ -828,6 +835,8 @@ def home():
         tavoli = [t for t in tavoli if not t["esclusivo"]]
     if fasce_sel:
         tavoli = [t for t in tavoli if fascia_di(t["data_ora"]) in fasce_sel]
+    if tip_sel in TIPOLOGIE_PER_SLUG:
+        tavoli = [t for t in tavoli if t["tipologia"] == tip_sel]
 
     pos = pos_da_cookie()
     if pos:
@@ -2665,7 +2674,57 @@ def admin_feedback():
 
 @app.context_processor
 def tipologie_ctx():
-    return {"GRUPPI_TIPOLOGIE": GRUPPI_TIPOLOGIE, "TIPOLOGIE_PER_SLUG": TIPOLOGIE_PER_SLUG}
+    imm = {}
+    if request.endpoint in ("home", "dettaglio_tavolo", "mappa"):
+        try:
+            conn = get_db()
+            imm = {r["slug"]: r["url"] for r in esegui(conn, "SELECT slug, url FROM immagini_tipologie").fetchall()}
+            conn.close()
+        except Exception:
+            imm = {}
+    return {
+        "GRUPPI_TIPOLOGIE": GRUPPI_TIPOLOGIE,
+        "TIPOLOGIE_PER_SLUG": TIPOLOGIE_PER_SLUG,
+        "IMM_TIP": imm,
+        "tipologia_sel": request.args.get("tipologia", ""),
+    }
+
+
+def _tipologia_di(tavolo_id):
+    try:
+        conn = get_db()
+        r = esegui(conn, "SELECT tipologia FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+        conn.close()
+        return r["tipologia"] if r and r["tipologia"] else None
+    except Exception:
+        return None
+
+
+app.jinja_env.globals["tipologia_di"] = _tipologia_di
+
+
+@app.route("/admin/tipologie", methods=["GET", "POST"])
+@solo_admin
+def admin_tipologie():
+    conn = get_db()
+    if request.method == "POST":
+        slug = request.form.get("slug", "")
+        if slug not in TIPOLOGIE_PER_SLUG:
+            conn.close()
+            abort(400)
+        url = salva_foto(request.files.get("immagine"), "tipologie")
+        if url:
+            if esegui(conn, "SELECT slug FROM immagini_tipologie WHERE slug = ?", (slug,)).fetchone():
+                esegui(conn, "UPDATE immagini_tipologie SET url = ? WHERE slug = ?", (url, slug))
+            else:
+                esegui(conn, "INSERT INTO immagini_tipologie (slug, url) VALUES (?, ?)", (slug, url))
+            conn.commit()
+            flash("Immagine salvata.")
+        conn.close()
+        return redirect(url_for("admin_tipologie") + "#" + slug)
+    immagini = {r["slug"]: r["url"] for r in esegui(conn, "SELECT slug, url FROM immagini_tipologie").fetchall()}
+    conn.close()
+    return render_template("admin_tipologie.html", immagini=immagini)
 
 
 @app.route("/miei-tavoli")

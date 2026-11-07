@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tipologie - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('admin') }}">← Pannello di controllo</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        {% include "_admin_nav.html" %}
+        <h3 class="titolo-sezione">🏛️ Immagini delle tipologie</h3>
+        <p class="nota">Formato consigliato: panoramico 1600×600, JPG o WebP, senza scritte né loghi.</p>
+        {% for gruppo, elenco in GRUPPI_TIPOLOGIE %}
+        <h3 class="titolo-sezione">{{ gruppo }}</h3>
+        {% for t in elenco %}
+        <div class="card-tavolo" id="{{ t.slug }}"><div class="corpo-card">
+            <h2>{{ t.emoji }} {{ t.nome }}</h2>
+            <p class="nota">{{ t.descrizione }}</p>
+            {% if immagini.get(t.slug) %}<img class="anteprima-tip" src="{{ immagini[t.slug] }}" alt="{{ t.nome }}">{% else %}<p class="vuoto">Nessuna immagine.</p>{% endif %}
+            <form method="POST" action="{{ url_for('admin_tipologie') }}" enctype="multipart/form-data">
+                <input type="hidden" name="slug" value="{{ t.slug }}">
+                <input type="file" name="immagine" accept="image/*" required>
+                <button type="submit" class="btn-piccolo">Carica</button>
+            </form>
+        </div></div>
+        {% endfor %}
+        {% endfor %}
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

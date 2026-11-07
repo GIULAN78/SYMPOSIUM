@@ -1297,3 +1297,61 @@ header::after {
     font-weight: 700;
     box-sizing: border-box;
 }
+
+/* Tipologie 2 */
+.tipologia-etichetta {
+    display: inline-block;
+    margin: 0 0 0.3rem;
+    padding: 0.1rem 0.7rem;
+    border-radius: 12px;
+    background: var(--oro);
+    color: #0f2468;
+    font-size: 0.8rem;
+}
+
+.riquadro-tipologia {
+    position: relative;
+    margin: 0.6rem 0;
+    border: 3px solid var(--oro);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fffdf6;
+}
+
+.riquadro-tipologia img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 8 / 3;
+    object-fit: cover;
+}
+
+.riquadro-tipologia .rt-titolo {
+    position: absolute;
+    left: 0.7rem;
+    top: 0.6rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 8px;
+    background: rgba(15, 36, 104, 0.6);
+    color: #ffe27a;
+    font-family: 'Cinzel Decorative', Georgia, serif;
+}
+
+.riquadro-tipologia .rt-testo {
+    padding: 0.5rem 0.8rem;
+    color: var(--testo);
+}
+
+.riquadro-tipologia .rt-testo p {
+    margin: 0.2rem 0 0;
+}
+
+.anteprima-tip {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 8 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid var(--oro);
+    margin: 0.4rem 0;
+}

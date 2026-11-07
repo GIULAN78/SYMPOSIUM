@@ -39,6 +39,11 @@
                     {% endif %}
                 </div>
                 {% endif %}
+                {% set tip_slug = tipologia_di(tavolo.id) %}{% set tip = TIPOLOGIE_PER_SLUG.get(tip_slug) %}
+                {% if tip %}<div class="riquadro-tipologia">
+                    {% if IMM_TIP.get(tip.slug) %}<img src="{{ IMM_TIP[tip.slug] }}" alt="{{ tip.nome }}"><span class="rt-titolo">{{ tip.emoji }} {{ tip.nome }}</span>{% endif %}
+                    <div class="rt-testo">{% if not IMM_TIP.get(tip.slug) %}<strong>{{ tip.emoji }} {{ tip.nome }}</strong>{% endif %}<p>{{ tip.descrizione }}</p></div>
+                </div>{% endif %}
                 <h2>{{ tavolo.tema }}{% if confermato %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if concluso %} <span class="badge badge-fine">Concluso</span>{% endif %}</h2>
                 <p class="riga-org">
                     {{ avatar(tavolo.organizzatore_foto, tavolo.organizzatore_nome, 'avatar-sm') }}
