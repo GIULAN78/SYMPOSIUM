@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import sqlite3
 import os
 from tipologie import GRUPPI as GRUPPI_TIPOLOGIE, TIPOLOGIE_PER_SLUG
+from interessi import GRUPPI_INTERESSI, LINGUE
 import io
 import uuid
 from datetime import datetime, date, timedelta
@@ -167,6 +168,8 @@ def init_db():
     aggiungi_colonna(conn, "utenti", "formazione", "TEXT")
     aggiungi_colonna(conn, "utenti", "bio", "TEXT")
     aggiungi_colonna(conn, "utenti", "foto_url", "TEXT")
+    aggiungi_colonna(conn, "utenti", "genere", "TEXT")
+    aggiungi_colonna(conn, "utenti", "lingue", "TEXT")
 
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS locali (
@@ -2687,6 +2690,8 @@ def tipologie_ctx():
         "TIPOLOGIE_PER_SLUG": TIPOLOGIE_PER_SLUG,
         "IMM_TIP": imm,
         "tipologia_sel": request.args.get("tipologia", ""),
+        "GRUPPI_INTERESSI": GRUPPI_INTERESSI,
+        "LINGUE": LINGUE,
     }
 
 
@@ -3199,6 +3204,12 @@ def modifica_profilo():
         """, (nome, data_nascita, request.form.get("citta", "").strip(),
               request.form.get("professione", "").strip(), request.form.get("formazione", "").strip(),
               request.form.get("bio", "").strip(), request.form.get("interessi", "").strip(), uid))
+
+        genere = request.form.get("genere", "")
+        if genere not in ("", "donna", "uomo", "altro"):
+            genere = ""
+        lingue = ", ".join(x for x in request.form.getlist("lingue") if x in LINGUE)
+        esegui(conn, "UPDATE utenti SET genere = ?, lingue = ? WHERE id = ?", (genere, lingue, uid))
 
         nuova_foto = salva_foto(request.files.get("foto"), "profili")
         if nuova_foto:

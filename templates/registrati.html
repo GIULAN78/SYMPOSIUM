@@ -35,8 +35,7 @@
             <label for="citta">Città</label>
             <input type="text" id="citta" name="citta" placeholder="Es. Grignasco" required>
 
-            <label for="interessi">Interessi (separati da virgola)</label>
-            <input type="text" id="interessi" name="interessi" placeholder="Es. storia, cinema, viaggi, cucina">
+            {% include "_interessi.html" %}
 
             <button type="submit" class="btn-nuovo">Unisciti a Symposium</button>
             <p class="link-alt">Hai già un account? <a href="{{ url_for('accedi') }}">Accedi</a></p>

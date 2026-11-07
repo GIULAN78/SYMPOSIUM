@@ -1355,3 +1355,46 @@ header::after {
     border: 2px solid var(--oro);
     margin: 0.4rem 0;
 }
+
+/* Interessi */
+.griglia-interessi {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.3rem 0 0.6rem;
+}
+
+.form-tavolo .chip-int {
+    position: relative;
+    display: inline-block;
+    margin: 0;
+    cursor: pointer;
+}
+
+.chip-int input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.chip-int span {
+    display: inline-block;
+    padding: 0.2rem 0.7rem;
+    border: 2px solid var(--oro);
+    border-radius: 14px;
+    background: #fffdf6;
+    color: var(--testo);
+    font-size: 0.85rem;
+}
+
+.chip-int input:checked + span {
+    background: var(--oro);
+    color: #0f2468;
+}
+
+.gruppo-int {
+    margin: 0.5rem 0 0;
+    font-family: 'Cinzel Decorative', Georgia, serif;
+    font-size: 0.8rem;
+}

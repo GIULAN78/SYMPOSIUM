@@ -1,0 +1,13 @@
+<label>Interessi</label>
+<div id="interessi-box">
+    {% for gruppo, voci in GRUPPI_INTERESSI %}
+    <p class="gruppo-int">{{ gruppo }}</p>
+    <div class="griglia-interessi">
+        {% for v in voci %}<label class="chip-int"><input type="checkbox" value="{{ v }}"><span>{{ v }}</span></label>{% endfor %}
+    </div>
+    {% endfor %}
+</div>
+<label for="interessi-altri">Altri interessi (separati da virgola)</label>
+<input type="text" id="interessi-altri" placeholder="Es. restauro, bonsai">
+<input type="hidden" id="interessi" name="interessi" value="{{ valore_interessi|default('') }}">
+<script src="/static/js/interessi.js" defer></script>

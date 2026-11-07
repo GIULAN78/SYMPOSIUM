@@ -47,8 +47,18 @@
             <label for="bio">Qualcosa su di me</label>
             <textarea id="bio" name="bio" rows="4">{{ u.bio or '' }}</textarea>
 
-            <label for="interessi">Interessi (separati da virgola)</label>
-            <input type="text" id="interessi" name="interessi" value="{{ u.interessi or '' }}">
+            {% with valore_interessi = u.interessi or '' %}{% include "_interessi.html" %}{% endwith %}
+            <label for="genere">Genere (facoltativo)</label>
+            <select id="genere" name="genere">
+                <option value="">Preferisco non dirlo</option>
+                <option value="donna" {% if u.genere == 'donna' %}selected{% endif %}>Donna</option>
+                <option value="uomo" {% if u.genere == 'uomo' %}selected{% endif %}>Uomo</option>
+                <option value="altro" {% if u.genere == 'altro' %}selected{% endif %}>Altro</option>
+            </select>
+            <label>Lingue parlate (facoltativo)</label>
+            <div class="griglia-interessi">
+                {% for l in LINGUE %}<label class="chip-int"><input type="checkbox" name="lingue" value="{{ l }}" {% if l in (u.lingue or '').split(', ') %}checked{% endif %}><span>{{ l }}</span></label>{% endfor %}
+            </div>
 
             <button type="submit" class="btn-nuovo">Salva profilo</button>
         </form>
