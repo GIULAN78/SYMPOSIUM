@@ -1,5 +1,5 @@
 :root {
-    --notte: #12286a;
+    --notte: #0f2468;
     --notte-chiaro: #17265a;
     --oro: #d4af37;
     --oro-chiaro: #ecd27a;
@@ -978,17 +978,17 @@ main > .riga-org {
 /* Tema blu Grecia */
 :root {
     --notte: #0a4a8a;
-    --notte-chiaro: #12286a;
-    --oro: #c99a3b;
+    --notte-chiaro: #0f2468;
+    --oro: #ffd04d;
     --oro-chiaro: #fff08a;
-    --avorio: #f6f1e6;
+    --avorio: #fffdf6;
     --avorio-scuro: #c3d9f2;
     --bordeaux: #c4264a;
     --testo: #0a2f5c;
 }
 
 body {
-    background: #12286a;
+    background: #0f2468;
 }
 
 header {
@@ -1090,18 +1090,18 @@ header::after {
 
 /* Tema attenuato */
 :root {
-    --notte: #12286a;
-    --notte-chiaro: #1d3f95;
-    --oro: #c99a3b;
-    --oro-chiaro: #e2c46f;
-    --avorio: #f6f1e6;
-    --avorio-scuro: #e3d9c2;
-    --bordeaux: #a8344f;
-    --testo: #12286a;
+    --notte: #0f2468;
+    --notte-chiaro: #2a63d8;
+    --oro: #ffd04d;
+    --oro-chiaro: #ffe27a;
+    --avorio: #fffdf6;
+    --avorio-scuro: #efe6cc;
+    --bordeaux: #d6335a;
+    --testo: #0f2468;
 }
 
 body {
-    background: #1d3f95;
+    background: #2a63d8;
 }
 
 body, input, textarea, select, button, label, a, p, span, li, td, th, small, strong, h1, h2, h3 {
@@ -1109,7 +1109,7 @@ body, input, textarea, select, button, label, a, p, span, li, td, th, small, str
 }
 
 header {
-    background: #12286a;
+    background: #0f2468;
     border-bottom: 3px solid var(--oro);
 }
 
@@ -1121,7 +1121,7 @@ header {
 .descrizione,
 .valuta,
 .lista-stat {
-    background: #fbf8f0;
+    background: #ffffff;
 }
 
 .notifica.non-letta {
@@ -1129,22 +1129,22 @@ header {
 }
 
 .badge-conf {
-    background: #2f8a5a;
+    background: #22a96a;
 }
 
 .badge-ass {
-    background: #a8344f;
+    background: #d6335a;
 }
 
 .badge-fine {
-    background: #55677f;
+    background: #5b6f90;
 }
 
 .copertina,
 .banner-home,
 .anteprima-img,
 .avatar {
-    filter: saturate(0.85) brightness(0.92);
+    filter: none;
 }
 
 body::after {
@@ -1154,7 +1154,7 @@ body::after {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(10, 25, 50, 0.10);
+    background: transparent;
     pointer-events: none;
     z-index: 40;
 }
@@ -1232,25 +1232,26 @@ h1, h2, h3, .titolo-sezione, .etichetta, .badge, .titolo-fasce {
     text-align: right;
 }
 
-/* Tema abito greco */
+/* Tema vivace */
 :root {
-    --notte: #12286a;
-    --notte-chiaro: #1d3f95;
-    --oro: #c99a3b;
-    --oro-chiaro: #e2c46f;
-    --avorio: #f6f1e6;
-    --avorio-scuro: #e3d9c2;
-    --testo: #12286a;
-    --onda: #2f6fd0;
-    --tramonto: #e88c4c;
+    --notte: #1a46ac;
+    --notte-chiaro: #2a63d8;
+    --oro: #ffd04d;
+    --oro-chiaro: #ffe27a;
+    --avorio: #fffdf6;
+    --avorio-scuro: #efe6cc;
+    --testo: #0f2468;
+    --onda: #4a86f0;
+    --tramonto: #ff9a52;
+    --bordeaux: #d6335a;
 }
 
 body {
-    background: #1d3f95;
+    background: #2a63d8;
 }
 
 header {
-    background: #12286a;
+    background: #1a46ac;
     border-bottom: 3px solid var(--oro);
 }
 
@@ -1259,12 +1260,12 @@ header::after {
     display: block;
     height: 24px;
     margin: 16px -1.5rem -2rem;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M0 22H24M4 22V2H20V16H10V8H14' fill='none' stroke='%23c99a3b' stroke-width='2' stroke-linecap='square'/%3E%3C/svg%3E") repeat-x center;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M0 22H24M4 22V2H20V16H10V8H14' fill='none' stroke='%23ffd04d' stroke-width='2' stroke-linecap='square'/%3E%3C/svg%3E") repeat-x center;
 }
 
 .campanella-n {
     background: var(--tramonto);
-    color: #12286a;
+    color: #0f2468;
 }
 
 .card-tavolo {
@@ -1272,6 +1273,14 @@ header::after {
 }
 
 .notifica.non-letta {
-    background: #f3e7c0;
+    background: #fff3c4;
 }
-/* Fine tema abito greco */
+
+.badge-conf {
+    background: #22a96a;
+}
+
+.badge-ass {
+    background: #d6335a;
+}
+/* Fine tema vivace */
