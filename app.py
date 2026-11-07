@@ -200,6 +200,8 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "eta_max", "INTEGER")
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
+    aggiungi_colonna(conn, "tavoli", "raggio_km", "INTEGER")
+    aggiungi_colonna(conn, "tavoli", "gusto_limite", "INTEGER DEFAULT 0")
     esegui(conn, """
         CREATE TABLE IF NOT EXISTS immagini_tipologie (
             slug TEXT PRIMARY KEY,
@@ -841,6 +843,13 @@ def home():
     if tip_sel in TIPOLOGIE_PER_SLUG:
         tavoli = [t for t in tavoli if t["tipologia"] == tip_sel]
 
+    tavoli = [dict(t) for t in tavoli]
+    miei_int = set_interessi((io["interessi"] if io else "") or "")
+    for t in tavoli:
+        ti = interessi_tavolo(t.get("tipologia"), t.get("tema"))
+        t["in_comune"] = len(miei_int & set_interessi(", ".join(ti))) if ti and miei_int else 0
+    if request.args.get("suggeriti") == "1":
+        tavoli.sort(key=lambda t: (-t["in_comune"], t["data_ora"] or ""))
     pos = pos_da_cookie()
     if pos:
         tavoli = [dict(t) for t in tavoli]
@@ -2692,6 +2701,7 @@ def tipologie_ctx():
         "tipologia_sel": request.args.get("tipologia", ""),
         "GRUPPI_INTERESSI": GRUPPI_INTERESSI,
         "LINGUE": LINGUE,
+        "suggeriti_sel": request.args.get("suggeriti") == "1",
     }
 
 
@@ -2730,6 +2740,69 @@ def admin_tipologie():
     immagini = {r["slug"]: r["url"] for r in esegui(conn, "SELECT slug, url FROM immagini_tipologie").fetchall()}
     conn.close()
     return render_template("admin_tipologie.html", immagini=immagini)
+
+
+MAPPA_TIP_INTERESSI = {
+    "convivio-estia": ["Cucina", "Nuove amicizie"],
+    "xenia": ["Nuove amicizie", "Viaggi"],
+    "baccanale": ["Musica dal vivo", "Vino"],
+    "saturnali": ["Nuove amicizie"],
+    "consesso-afrodite": ["Nuove amicizie"],
+    "sissizio": ["Imprenditoria", "Nuove amicizie"],
+    "convito-olimpia": ["Calcio", "Running", "Palestra", "Nuoto", "Ciclismo"],
+    "parnaso": ["Letteratura", "Arte", "Filosofia", "Poesia"],
+    "calliope": ["Letteratura", "Poesia"],
+    "talia": ["Teatro", "Cinema"],
+    "euterpe": ["Karaoke", "Musica dal vivo", "Suonare uno strumento", "Musica classica", "Jazz", "Pop", "Rock"],
+    "clio": ["Storia", "Archeologia", "Mitologia"],
+    "urania": ["Astronomia", "Scienza"],
+    "melpomene": ["Teatro", "Cinema"],
+    "agone": ["Giochi da tavolo", "Quiz ed enigmi", "Videogiochi"],
+    "palamede": ["Giochi da tavolo", "Giochi di ruolo", "Scacchi"],
+    "delfi": ["Quiz ed enigmi", "Mitologia"],
+    "atena": ["Scacchi", "Giochi da tavolo"],
+    "edipo": ["Quiz ed enigmi", "Giochi di ruolo"],
+    "eracle": ["Trekking", "Palestra", "Running", "Arti marziali", "Calcio", "Ciclismo", "Nuoto"],
+    "ermes-tregua": ["Nuove amicizie"],
+    "pandora": ["Nuove amicizie"],
+    "dioniso": ["Vino", "Birra artigianale"],
+    "demetra": ["Cucina tipica", "Cucina"],
+    "ambrosia": ["Pasticceria", "Cucina"],
+    "eos": ["Pasticceria", "Cucina"],
+    "agora": ["Imprenditoria", "Tecnologia"],
+    "ermes-lingua": ["Lingue straniere", "Viaggi"],
+    "artemide": ["Natura", "Animali", "Trekking", "Campeggio"],
+    "ade": ["Nuove amicizie"],
+    "olimpo": ["Mitologia", "Storia"],
+    "immortali": ["Mitologia", "Arte"],
+    "zeus": ["Mitologia", "Filosofia"],
+}
+
+
+def interessi_tavolo(tipologia, tema):
+    import re as _re
+    nomi = list(MAPPA_TIP_INTERESSI.get(tipologia or "", []))
+    testo = (tema or "").lower()
+    for _g, voci in GRUPPI_INTERESSI:
+        for v in voci:
+            if len(v) >= 4 and v not in nomi and _re.search(r"\b" + _re.escape(v.lower()) + r"\b", testo):
+                nomi.append(v)
+    return nomi
+
+
+def _limiti_di(tavolo_id):
+    try:
+        conn = get_db()
+        r = esegui(conn, "SELECT raggio_km, gusto_limite FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+        conn.close()
+        if not r:
+            return {"raggio_km": None, "gusto": False}
+        return {"raggio_km": r["raggio_km"] or None, "gusto": bool(r["gusto_limite"])}
+    except Exception:
+        return {"raggio_km": None, "gusto": False}
+
+
+app.jinja_env.globals["limiti_di"] = _limiti_di
 
 
 @app.route("/miei-tavoli")
@@ -3285,6 +3358,10 @@ def nuovo_tavolo():
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
         esegui(conn, "UPDATE tavoli SET tipologia = ? WHERE id = ?", (tipologia, tavolo_id))
+        _r = request.form.get("raggio_km", "")
+        raggio_km = int(_r) if _r in ("10", "30", "50", "100") else None
+        gusto_limite = 1 if request.form.get("gusto_limite") == "1" else 0
+        esegui(conn, "UPDATE tavoli SET raggio_km = ?, gusto_limite = ? WHERE id = ?", (raggio_km, gusto_limite, tavolo_id))
         if request.form.get("su_richiesta") == "1":
             esegui(conn, "UPDATE tavoli SET su_richiesta = 1 WHERE id = ?", (tavolo_id,))
         if esclusivo_sel and e_premium(conn, utente_id):
@@ -3373,6 +3450,27 @@ def iscriviti(tavolo_id):
         conn.close()
         flash("Hai già una richiesta per questo banchetto.")
         return redirect(request.referrer or url_for("home"))
+    lim = esegui(conn, "SELECT tipologia, tema, lat, lng, raggio_km, gusto_limite FROM tavoli WHERE id = ?",
+                 (tavolo_id,)).fetchone()
+    if lim and lim["raggio_km"]:
+        pos_u = pos_da_cookie()
+        if pos_u is None:
+            conn.close()
+            flash("Questo banchetto ha un limite di distanza: attiva la posizione per poterti iscrivere.")
+            return redirect(request.referrer or url_for("home"))
+        if lim["lat"] is not None and lim["lng"] is not None:
+            km = distanza_km(pos_u[0], pos_u[1], lim["lat"], lim["lng"])
+            if km > lim["raggio_km"]:
+                conn.close()
+                flash("Troppo lontano: sei a circa %d km dal locale e il limite è %d km." % (round(km), lim["raggio_km"]))
+                return redirect(request.referrer or url_for("home"))
+    if lim and lim["gusto_limite"]:
+        richiesti = interessi_tavolo(lim["tipologia"], lim["tema"])
+        miei = set_interessi((io["interessi"] if io else "") or "")
+        if richiesti and not (miei & set_interessi(", ".join(richiesti))):
+            conn.close()
+            flash("Questo banchetto è per chi condivide un interesse con la tipologia: " + ", ".join(sorted(richiesti)[:5]) + ".")
+            return redirect(request.referrer or url_for("home"))
     pieno = tavolo["iscritti"] >= tavolo["posti_totali"]
     if pieno or extra["su_richiesta"]:
         stato_r = "coda" if pieno else "attesa"

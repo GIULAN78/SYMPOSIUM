@@ -44,6 +44,7 @@
                     {% if IMM_TIP.get(tip.slug) %}<img src="{{ IMM_TIP[tip.slug] }}" alt="{{ tip.nome }}"><span class="rt-titolo">{{ tip.emoji }} {{ tip.nome }}</span>{% endif %}
                     <div class="rt-testo">{% if not IMM_TIP.get(tip.slug) %}<strong>{{ tip.emoji }} {{ tip.nome }}</strong>{% endif %}<p>{{ tip.descrizione }}</p></div>
                 </div>{% endif %}
+                {% set lim = limiti_di(tavolo.id) %}{% if lim.raggio_km or lim.gusto %}<p class="limiti-banchetto">{% if lim.raggio_km %}📏 Entro {{ lim.raggio_km }} km dal locale{% endif %}{% if lim.raggio_km and lim.gusto %} · {% endif %}{% if lim.gusto %}🎯 Per chi condivide un interesse con la tipologia{% endif %}</p>{% endif %}
                 <h2>{{ tavolo.tema }}{% if confermato %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if concluso %} <span class="badge badge-fine">Concluso</span>{% endif %}</h2>
                 <p class="riga-org">
                     {{ avatar(tavolo.organizzatore_foto, tavolo.organizzatore_nome, 'avatar-sm') }}

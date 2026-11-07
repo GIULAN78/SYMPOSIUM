@@ -71,6 +71,15 @@
             <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Banchetto degli dei (riservato ai Premium) {% if pag_attivo %}· costa {{ prezzo_dei }} ALX{% else %}· gratis per ora{% endif %}</label>
             {% endif %}
             <label class="riga-check"><input type="checkbox" name="su_richiesta" value="1"> 🔒 Su richiesta (approvo io chi partecipa)</label>
+            <label for="raggio_km">Distanza massima dal locale</label>
+            <select id="raggio_km" name="raggio_km">
+                <option value="">Nessun limite</option>
+                <option value="10">Entro 10 km</option>
+                <option value="30">Entro 30 km</option>
+                <option value="50">Entro 50 km</option>
+                <option value="100">Entro 100 km</option>
+            </select>
+            <label class="riga-check"><input type="checkbox" name="gusto_limite" value="1"> 🎯 Solo per chi condivide almeno un interesse con la tipologia</label>
             <button type="submit" class="btn-nuovo">Crea banchetto</button>
         </form>
     </main>

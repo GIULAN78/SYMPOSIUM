@@ -1398,3 +1398,20 @@ header::after {
     font-family: 'Cinzel Decorative', Georgia, serif;
     font-size: 0.8rem;
 }
+
+/* Suggeriti */
+.in-comune-et {
+    display: inline-block;
+    margin: 0 0 0.3rem 0.4rem;
+    font-size: 0.8rem;
+    color: var(--testo);
+}
+
+.limiti-banchetto {
+    margin: 0.3rem 0;
+    padding: 0.3rem 0.7rem;
+    border-radius: 8px;
+    background: #fff3c4;
+    color: #0f2468;
+    font-size: 0.85rem;
+}
