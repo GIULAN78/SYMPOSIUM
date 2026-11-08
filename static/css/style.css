@@ -1569,3 +1569,25 @@ header h1 {
 .box-cerchio p {
     margin: 0.2rem 0;
 }
+
+/* Avviso email */
+#avviso-email {
+    padding: 0.5rem 0.8rem;
+    text-align: center;
+    font-weight: 700;
+    background: #fff3c4;
+    color: #0f2468;
+    border-bottom: 3px solid #c8971f;
+}
+
+#avviso-email button {
+    margin-left: 0.4rem;
+    padding: 0.15rem 0.7rem;
+    border-radius: 8px;
+    border: 2px solid #c8971f;
+    background: #0d2a78;
+    color: #ffe27a;
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}

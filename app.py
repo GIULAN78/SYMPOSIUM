@@ -201,6 +201,17 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "email_verificata", "INTEGER")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS verifica_email (
+            id {pk},
+            utente_id INTEGER,
+            token_hash TEXT NOT NULL,
+            scade_il TEXT,
+            usato INTEGER DEFAULT 0,
+            creato_il TEXT
+        )
+    """)
     aggiungi_colonna(conn, "tavoli", "cerchio_id", "INTEGER")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS cerchi (
@@ -3060,6 +3071,10 @@ def _tavolo_per_invito(conn, tavolo_id):
     if not t:
         conn.close()
         abort(404)
+    if not email_verificata(conn, session["utente_id"]):
+        conn.close()
+        flash("Conferma la tua email per invitare altri utenti.")
+        abort(redirect(url_for("home")))
     return t
 
 
@@ -3478,6 +3493,101 @@ def cerchio_posto(tavolo_id, azione):
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
+def email_verificata(conn, uid):
+    r = esegui(conn, "SELECT email_verificata FROM utenti WHERE id = ?", (uid,)).fetchone()
+    return (not r) or r["email_verificata"] is None or int(r["email_verificata"]) == 1
+
+
+def _invia_verifica(conn, uid, nome, email):
+    import hashlib
+    import secrets
+    ora = adesso_it()
+    recenti = esegui(conn, "SELECT COUNT(*) AS n FROM verifica_email WHERE utente_id = ? AND creato_il > ?",
+                     (uid, (ora - timedelta(hours=1)).isoformat())).fetchone()["n"]
+    if int(recenti) >= 3:
+        return False
+    token = secrets.token_urlsafe(32)
+    esegui(conn, "INSERT INTO verifica_email (utente_id, token_hash, scade_il, usato, creato_il) VALUES (?, ?, ?, 0, ?)",
+           (uid, hashlib.sha256(token.encode()).hexdigest(), (ora + timedelta(hours=24)).isoformat(), ora.isoformat()))
+    conn.commit()
+    base = request.url_root.rstrip("/")
+    if base.startswith("http://") and "localhost" not in base and "127.0.0.1" not in base:
+        base = "https://" + base[len("http://"):]
+    link = base + "/verifica-email/" + token
+    pulito = (nome or "").replace("<", "").replace(">", "")
+    html = (
+        "<div style='background:#143b8f;padding:28px 14px;font-family:Georgia,serif;'>"
+        "<div style='max-width:520px;margin:0 auto;background:#fffdf6;border:2px solid #c8971f;border-radius:14px;padding:24px;color:#0f2468;'>"
+        "<h2 style='margin-top:0;letter-spacing:2px;'>SYMPOSIUM</h2>"
+        "<p>Ciao " + pulito + ", benvenuto! Conferma il tuo indirizzo email per creare banchetti e invitare gli amici.</p>"
+        "<p><a href='" + link + "' style='display:inline-block;background:#0d2a78;color:#ffe27a;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold;'>Conferma la mia email</a></p>"
+        "<p style='font-size:13px;'>Il link vale 24 ore. Se non ti sei registrato tu, ignora questa email.</p>"
+        "</div></div>"
+    )
+    api_alexandria("POST", "/symposium/invia-email",
+                   {"destinatario": email, "oggetto": "Symposium: conferma la tua email", "html": html},
+                   con_chiave=True)
+    return True
+
+
+@app.route("/verifica-email/<token>")
+def verifica_email_pagina(token):
+    import hashlib
+    th = hashlib.sha256(token.encode()).hexdigest()
+    conn = get_db()
+    r = esegui(conn, "SELECT id, utente_id, scade_il, usato FROM verifica_email WHERE token_hash = ?", (th,)).fetchone()
+    if (not r) or r["usato"] or (not r["scade_il"]) or r["scade_il"] <= adesso_it().isoformat():
+        conn.close()
+        flash("Il link non è valido o è scaduto: puoi chiederne uno nuovo dall'avviso in alto.")
+        return redirect(url_for("home"))
+    esegui(conn, "UPDATE utenti SET email_verificata = 1 WHERE id = ?", (r["utente_id"],))
+    esegui(conn, "UPDATE verifica_email SET usato = 1 WHERE utente_id = ?", (r["utente_id"],))
+    conn.commit()
+    conn.close()
+    flash("Email confermata: grazie!")
+    return redirect(url_for("home"))
+
+
+@app.route("/reinvia-verifica", methods=["POST"])
+@login_richiesto
+def reinvia_verifica():
+    conn = get_db()
+    u = esegui(conn, "SELECT id, nome, email FROM utenti WHERE id = ?", (session["utente_id"],)).fetchone()
+    if u and not email_verificata(conn, u["id"]):
+        if _invia_verifica(conn, u["id"], u["nome"], u["email"]):
+            flash("Ti abbiamo inviato un nuovo link: controlla la posta, anche tra la posta indesiderata.")
+        else:
+            flash("Hai già chiesto troppi link: riprova tra un'ora.")
+    conn.close()
+    return redirect(request.referrer or url_for("home"))
+
+
+@app.after_request
+def avviso_email(risposta):
+    try:
+        if ("utente_id" not in session or risposta.status_code != 200 or risposta.mimetype != "text/html"
+                or request.endpoint in ("esci", "verifica_email_pagina", "reinvia_verifica", "static")):
+            return risposta
+        conn = get_db()
+        ok = email_verificata(conn, session["utente_id"])
+        conn.close()
+        if ok:
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        if "avviso-email" in testo:
+            return risposta
+        import re as _re
+        m = _re.search(r"<body[^>]*>", testo)
+        if m:
+            html = ("<div id='avviso-email'>📧 Conferma la tua email per creare banchetti e invitare altri utenti. "
+                    "<form method='POST' action='" + url_for("reinvia_verifica") + "' style='display:inline'>"
+                    "<button type='submit'>Invia di nuovo il link</button></form></div>")
+            risposta.set_data(testo[:m.end()] + html + testo[m.end():])
+    except Exception:
+        pass
+    return risposta
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -3838,14 +3948,18 @@ def registrati():
         try:
             nuovo_id = inserisci(
                 conn,
-                "INSERT INTO utenti (nome, email, password_hash, interessi, creato_il, data_nascita, citta) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO utenti (nome, email, password_hash, interessi, creato_il, data_nascita, citta, email_verificata) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
                 (nome, email, generate_password_hash(password), interessi, datetime.now().isoformat(), data_nascita, citta)
             )
             conn.commit()
             session["utente_id"] = nuovo_id
             session["utente_nome"] = nome
+            try:
+                _invia_verifica(conn, nuovo_id, nome, email)
+            except Exception:
+                pass
             conn.close()
-            flash("Benvenuto! Aggiungi una foto dal tuo profilo.")
+            flash("Benvenuto! Ti abbiamo inviato un'email: conferma l'indirizzo per creare banchetti e invitare gli amici.")
             return redirect(url_for("home"))
         except IntegrityError:
             conn.rollback()
@@ -3975,6 +4089,12 @@ def modifica_profilo():
 @app.route("/tavolo/nuovo", methods=["GET", "POST"])
 @login_richiesto
 def nuovo_tavolo():
+    _c = get_db()
+    _ok = email_verificata(_c, session["utente_id"])
+    _c.close()
+    if not _ok:
+        flash("Conferma la tua email per creare un banchetto: controlla la posta.")
+        return redirect(url_for("home"))
     if request.method == "POST":
         tema = request.form["tema"]
         locale_nome = request.form["locale"]
