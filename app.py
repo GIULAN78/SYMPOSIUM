@@ -3111,6 +3111,33 @@ def inviti_acquista():
     return redirect(request.referrer or url_for("home"))
 
 
+ENDPOINT_FAB = {
+    "home", "mappa", "locali", "dettaglio_tavolo", "miei_tavoli", "preferiti", "amici",
+    "elenco_messaggi", "profilo_utente", "pagina_premium", "impostazioni", "wallet",
+    "invita_utenti", "notifiche",
+}
+
+
+@app.after_request
+def pulsante_crea(risposta):
+    try:
+        if (
+            "utente_id" not in session
+            or risposta.status_code != 200
+            or risposta.mimetype != "text/html"
+            or request.endpoint not in ENDPOINT_FAB
+        ):
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        if "</body>" in testo and "fab-crea" not in testo:
+            html = ('<a id="fab-crea" href="' + url_for("nuovo_tavolo")
+                    + '" aria-label="Crea il tuo banchetto" title="Crea il tuo banchetto">+</a>')
+            risposta.set_data(testo.replace("</body>", html + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():

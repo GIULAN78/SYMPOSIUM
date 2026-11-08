@@ -1533,3 +1533,25 @@ header h1 {
     background: #fff3c4;
     font-family: 'Cinzel Decorative', Georgia, serif;
 }
+
+/* Pulsante crea */
+#fab-crea {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 45;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 900;
+    line-height: 1;
+    text-decoration: none;
+    color: #0f2468;
+    background: linear-gradient(135deg, #fff3b0 0%, #ffd04d 28%, #c8971f 52%, #ffe27a 74%, #b8860b 100%);
+    border: 2px solid #b8860b;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 4px 10px rgba(0, 0, 0, 0.45);
+}
