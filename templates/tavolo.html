@@ -160,6 +160,12 @@
         </div>
         {% endif %}
 
+        {% set og = ospiti_info(tavolo.id) %}{% if og.lista or og.puo or og.mio %}<div class="box-cerchio">
+            <p>👥 <strong>Ospiti</strong></p>
+            {% for o in og.lista %}<p>{{ o.nome }} · accompagna {{ o.host }}</p>{% endfor %}
+            {% if og.mio %}<form method="POST" action="{{ url_for('ospite_rimuovi', tavolo_id=tavolo.id) }}"><button type="submit" class="btn-annulla">Rimuovi il mio ospite</button></form>
+            {% elif og.puo %}<form method="POST" action="{{ url_for('ospite_aggiungi', tavolo_id=tavolo.id) }}"><input type="text" name="nome" maxlength="40" placeholder="Nome del tuo ospite (maggiorenne)" required> <button type="submit" class="btn-piccolo">+1 Porta un ospite</button></form>{% endif %}
+        </div>{% endif %}
         <div class="box-cerchio" id="socrate">
             <p>🏛️ <strong>Le domande di Socrate</strong></p>
             <p id="socrate-testo">Una domanda per rompere il ghiaccio a tavola.</p>

@@ -202,6 +202,16 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
     esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS ospiti_tavolo (
+            id {pk},
+            tavolo_id INTEGER,
+            utente_id INTEGER,
+            nome TEXT,
+            creato_il TEXT,
+            UNIQUE (tavolo_id, utente_id)
+        )
+    """)
+    esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS wallet_alx (
             id {pk},
             utente_id INTEGER UNIQUE,
@@ -3300,7 +3310,12 @@ def _riservati(conn, tavolo_id, escludi_uid=0):
         WHERE tavolo_id = ? AND stato = 'attesa' AND scade_il > ? AND utente_id != ?
           AND utente_id NOT IN (SELECT utente_id FROM iscrizioni WHERE tavolo_id = ?)
     """, (tavolo_id, adesso_it().isoformat(), escludi_uid, tavolo_id)).fetchone()
-    return int(r["n"]) if r else 0
+    base = int(r["n"]) if r else 0
+    o = esegui(conn, """
+        SELECT COUNT(*) AS n FROM ospiti_tavolo o
+        WHERE o.tavolo_id = ? AND o.utente_id IN (SELECT utente_id FROM iscrizioni WHERE tavolo_id = o.tavolo_id)
+    """, (tavolo_id,)).fetchone()
+    return base + (int(o["n"]) if o else 0)
 
 
 def _cerchio_di(tavolo_id):
@@ -4402,6 +4417,87 @@ def admin_alx():
     conn.close()
     flash("Accreditati %d ALX a %s." % (importo, u["nome"]))
     return redirect(url_for("admin"))
+
+
+def _ospiti_info(tavolo_id):
+    uid = session.get("utente_id")
+    vuoto = {"lista": [], "mio": None, "puo": False}
+    try:
+        conn = get_db()
+        righe = esegui(conn, """
+            SELECT o.nome, o.utente_id, u.nome AS host
+            FROM ospiti_tavolo o JOIN utenti u ON u.id = o.utente_id
+            WHERE o.tavolo_id = ? AND o.utente_id IN (SELECT utente_id FROM iscrizioni WHERE tavolo_id = o.tavolo_id)
+            ORDER BY o.id
+        """, (tavolo_id,)).fetchall()
+        t = esegui(conn, """
+            SELECT su_richiesta, posti_totali,
+                   (SELECT COUNT(*) FROM iscrizioni WHERE tavolo_id = ?) AS iscritti
+            FROM tavoli WHERE id = ?
+        """, (tavolo_id, tavolo_id)).fetchone()
+        res = {"lista": [{"nome": r["nome"], "host": r["host"]} for r in righe], "mio": None, "puo": False}
+        if uid and t:
+            mio = next((r for r in righe if r["utente_id"] == uid), None)
+            if mio:
+                res["mio"] = mio["nome"]
+            elif (e_iscritto(conn, tavolo_id, uid) and not t["su_richiesta"]
+                  and int(t["iscritti"]) + _riservati(conn, tavolo_id) + 1 <= int(t["posti_totali"])):
+                res["puo"] = True
+        conn.close()
+        return res
+    except Exception:
+        return vuoto
+
+
+app.jinja_env.globals["ospiti_info"] = _ospiti_info
+
+
+@app.route("/tavolo/<int:tavolo_id>/ospite", methods=["POST"])
+@login_richiesto
+def ospite_aggiungi(tavolo_id):
+    uid = session["utente_id"]
+    nome = request.form.get("nome", "").strip()[:40]
+    if not nome:
+        flash("Scrivi il nome del tuo ospite.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    conn = get_db()
+    t = esegui(conn, """
+        SELECT su_richiesta, posti_totali, organizzatore_id, tema,
+               (SELECT COUNT(*) FROM iscrizioni WHERE tavolo_id = ?) AS iscritti
+        FROM tavoli WHERE id = ?
+    """, (tavolo_id, tavolo_id)).fetchone()
+    if not t or not e_iscritto(conn, tavolo_id, uid):
+        flash("Per portare un ospite devi prima prendere posto.")
+    elif t["su_richiesta"]:
+        flash("Questo banchetto è su richiesta: l'organizzatore approva ogni persona, quindi non si possono portare ospiti.")
+    elif int(t["iscritti"]) + _riservati(conn, tavolo_id) + 1 > int(t["posti_totali"]):
+        flash("Non ci sono posti liberi per un ospite.")
+    else:
+        try:
+            esegui(conn, "INSERT INTO ospiti_tavolo (tavolo_id, utente_id, nome, creato_il) VALUES (?, ?, ?, ?)",
+                   (tavolo_id, uid, nome, adesso_it().isoformat()))
+            if t["organizzatore_id"] and t["organizzatore_id"] != uid:
+                notifica(conn, t["organizzatore_id"], "iscrizione", t["tema"],
+                         (session.get("utente_nome") or "Un partecipante") + " porta un ospite: " + nome,
+                         url_for("dettaglio_tavolo", tavolo_id=tavolo_id), uid)
+            conn.commit()
+            flash("Ospite aggiunto: occupa un posto al tavolo.")
+        except IntegrityError:
+            conn.rollback()
+            flash("Hai già un ospite per questo banchetto.")
+    conn.close()
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
+@app.route("/tavolo/<int:tavolo_id>/ospite/rimuovi", methods=["POST"])
+@login_richiesto
+def ospite_rimuovi(tavolo_id):
+    conn = get_db()
+    esegui(conn, "DELETE FROM ospiti_tavolo WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, session["utente_id"]))
+    conn.commit()
+    conn.close()
+    flash("Ospite rimosso: il posto è di nuovo libero.")
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
 @app.route("/miei-tavoli")
