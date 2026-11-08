@@ -5258,6 +5258,21 @@ def meta_condivisione(risposta):
     return risposta
 
 
+SCRIPT_NAV = """<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var n = document.querySelector(".nav-utente");
+    if (!n || document.querySelector(".nav-toggle")) { return; }
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn-piccolo nav-toggle";
+    b.textContent = "☰ Menu";
+    n.parentNode.insertBefore(b, n);
+    n.classList.add("nav-chiuso");
+    b.onclick = function () { n.classList.toggle("nav-chiuso"); };
+});
+</script>"""
+
+
 @app.after_request
 def barra_utente(risposta):
     try:
@@ -5292,7 +5307,7 @@ def barra_utente(risposta):
         html = ('<div id="barra-utente"><a class="bu-sx" href="' + link_profilo + '">'
                 + avatar + '<span class="bu-nome">' + nome + '</span></a>' + azione
                 + '<span class="bu-dx"><a href="' + link_profilo + '">Profilo</a>'
-                + '<a href="' + url_for("esci") + '">Esci</a></span></div>')
+                + '<a href="' + url_for("esci") + '">Esci</a></span></div>' + SCRIPT_NAV)
         risposta.set_data(testo[:m.end()] + html + testo[m.end():])
     except Exception:
         pass

@@ -1686,3 +1686,19 @@ header h1 {
     gap: 14px;
     flex: 0 0 auto;
 }
+
+/* Menu compatto */
+.nav-toggle {
+    display: none;
+}
+
+@media (max-width: 700px) {
+    .nav-toggle {
+        display: inline-block;
+        margin: 6px 0;
+    }
+
+    .nav-utente.nav-chiuso {
+        display: none;
+    }
+}
