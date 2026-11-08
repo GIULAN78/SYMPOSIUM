@@ -1415,3 +1415,71 @@ header::after {
     color: #0f2468;
     font-size: 0.85rem;
 }
+
+/* Tema metallico */
+body {
+    background: linear-gradient(160deg, #4a7fe8 0%, #2a63d8 32%, #1f4fb8 68%, #2f6ee0 100%) fixed;
+}
+
+header {
+    background: linear-gradient(180deg, #3a6fdc 0%, #1a46ac 48%, #102f86 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 3px 8px rgba(0, 0, 0, 0.35);
+    border-bottom: 3px solid #c8971f;
+}
+
+header h1 {
+    background: linear-gradient(180deg, #fff6c0 0%, #ffd84f 40%, #c8971f 70%, #ffe27a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: #ffd04d;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.45));
+}
+
+.btn-nuovo {
+    background: linear-gradient(135deg, #fff3b0 0%, #ffd04d 28%, #c8971f 52%, #ffe27a 74%, #b8860b 100%);
+    color: #0f2468;
+    border-color: #b8860b;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.btn-iscriviti, .btn-piccolo, .btn-annulla, .btn-indietro {
+    background: linear-gradient(180deg, #3a6fdc 0%, #12328a 100%);
+    color: #ffe27a;
+    border: 2px solid #c8971f;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.card-tavolo, .stat-card {
+    background: linear-gradient(180deg, #ffffff 0%, #fffdf6 55%, #f3ead0 100%);
+    border: 2px solid #c8971f;
+    border-left: 6px solid #e0b030;
+    box-shadow: inset 0 1px 0 #ffffff, 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.riquadro-tipologia {
+    border-color: #c8971f;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.badge-conf {
+    background: linear-gradient(180deg, #34c07f, #188a55);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.badge-ass {
+    background: linear-gradient(180deg, #e8506f, #b8264a);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.tipologia-etichetta, .chip-int input:checked + span {
+    background: linear-gradient(135deg, #fff3b0 0%, #ffd04d 28%, #c8971f 52%, #ffe27a 74%, #b8860b 100%);
+    color: #0f2468;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.campanella-n {
+    background: linear-gradient(180deg, #ffb06a, #e8742c);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+/* Fine tema metallico */
