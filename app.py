@@ -3971,6 +3971,89 @@ def miei_banchetti_home():
 app.jinja_env.globals["miei_banchetti_home"] = miei_banchetti_home
 
 
+BANNER_COOKIE = """<style>
+#cookie-banner{position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;background:#fffdf6;color:#0f2468;border:2px solid #c8971f;border-radius:12px;padding:12px;box-shadow:0 4px 14px rgba(0,0,0,.45);font:15px/1.4 Georgia,serif;display:none}
+#cookie-banner p{margin:0 0 8px}
+#cookie-banner .cb-azioni{display:flex;gap:6px;flex-wrap:wrap}
+#cookie-banner button{flex:1 1 30%;padding:9px 6px;border-radius:8px;border:2px solid #c8971f;background:#0d2a78;color:#ffe27a;font:inherit;font-weight:700;cursor:pointer}
+#cookie-banner label{display:block;margin:6px 0}
+#cb-pers{display:none;margin:8px 0}
+#cookie-gestisci{position:fixed;left:10px;bottom:10px;z-index:9998;width:40px;height:40px;border-radius:50%;border:2px solid #c8971f;background:#0d2a78;font-size:20px;cursor:pointer;display:none}
+</style>
+<div id="cookie-banner">
+<p>🍪 Usiamo cookie tecnici necessari al funzionamento. Con il tuo consenso carichiamo anche servizi di terzi (caratteri di Google e mappe), che ricevono il tuo indirizzo IP. Nessun cookie pubblicitario.</p>
+<div id="cb-pers">
+<label><input type="checkbox" checked disabled> Necessari (sempre attivi)</label>
+<label><input type="checkbox" id="cb-terzi"> Servizi esterni: caratteri Google e mappe</label>
+<button id="cb-salva" type="button">Salva la scelta</button>
+</div>
+<div class="cb-azioni">
+<button id="cb-tutti" type="button">Accetta tutti</button>
+<button id="cb-rifiuta" type="button">Rifiuta non necessari</button>
+<button id="cb-pers-btn" type="button">Personalizza</button>
+</div>
+</div>
+<button id="cookie-gestisci" type="button" title="Preferenze cookie" aria-label="Preferenze cookie">🍪</button>
+<script>
+(function () {
+  function leggi() { var m = document.cookie.match(/(?:^|; )symp_cookie=([^;]*)/); return m ? m[1] : null; }
+  function scrivi(v) { document.cookie = "symp_cookie=" + v + "; max-age=15552000; path=/; SameSite=Lax"; }
+  var b = document.getElementById("cookie-banner");
+  var g = document.getElementById("cookie-gestisci");
+  var pers = document.getElementById("cb-pers");
+  var casella = document.getElementById("cb-terzi");
+  function mostra() { casella.checked = (leggi() === "terzi"); b.style.display = "block"; g.style.display = "none"; }
+  function chiudi() { b.style.display = "none"; g.style.display = "block"; }
+  function scegli(v) {
+    var prima = leggi();
+    scrivi(v);
+    chiudi();
+    if ((prima === "terzi") !== (v === "terzi")) { location.reload(); }
+  }
+  document.getElementById("cb-tutti").onclick = function () { scegli("terzi"); };
+  document.getElementById("cb-rifiuta").onclick = function () { scegli("no"); };
+  document.getElementById("cb-pers-btn").onclick = function () { pers.style.display = (pers.style.display === "block") ? "none" : "block"; };
+  document.getElementById("cb-salva").onclick = function () { scegli(casella.checked ? "terzi" : "no"); };
+  g.onclick = mostra;
+  window.apriCookie = mostra;
+  if (leggi() === null) { mostra(); } else { chiudi(); }
+})();
+</script>
+"""
+
+PAGINA_MAPPA_CONSENSO = """<!DOCTYPE html>
+<html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Mappa - Symposium</title><link rel="stylesheet" href="/static/css/style.css"><meta name="theme-color" content="#1a46ac"></head>
+<body><header><h1>Symposium</h1></header>
+<main><h3 class="titolo-sezione">🗺️ Mappa</h3>
+<p class="nota">La mappa usa servizi esterni (OpenStreetMap e unpkg.com): per mostrarla il tuo indirizzo IP viene comunicato a questi servizi. Serve il tuo consenso.</p>
+<button id="mappa-consenti" class="btn-nuovo" type="button">Consenti e mostra la mappa</button>
+<p><a class="link-dettaglio" href="/">Vai all'elenco dei banchetti</a></p></main>
+<script>document.getElementById("mappa-consenti").onclick = function () { document.cookie = "symp_cookie=terzi; max-age=15552000; path=/; SameSite=Lax"; location.reload(); };</script>
+</body></html>"""
+
+
+@app.after_request
+def gestione_cookie(risposta):
+    try:
+        if risposta.status_code != 200 or risposta.mimetype != "text/html" or request.endpoint in (None, "static"):
+            return risposta
+        import re as _re
+        testo = risposta.get_data(as_text=True)
+        if "</body>" not in testo or "cookie-banner" in testo:
+            return risposta
+        if request.cookies.get("symp_cookie") != "terzi":
+            if request.endpoint == "mappa":
+                risposta.set_data(PAGINA_MAPPA_CONSENSO.replace("</body>", BANNER_COOKIE + "</body>", 1))
+                return risposta
+            testo = _re.sub(r"<link[^>]*fonts\.(?:googleapis|gstatic)\.com[^>]*>", "", testo, flags=_re.I)
+            testo = _re.sub(r"<script[^>]*unpkg\.com[^>]*></script>", "", testo, flags=_re.I)
+            testo = _re.sub(r"<link[^>]*unpkg\.com[^>]*>", "", testo, flags=_re.I)
+        risposta.set_data(testo.replace("</body>", BANNER_COOKIE + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
