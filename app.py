@@ -201,6 +201,7 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "termini_il", "TEXT")
     aggiungi_colonna(conn, "tavoli", "alx_pagati", "INTEGER DEFAULT 0")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS rimborsi_pendenti (
@@ -4974,6 +4975,9 @@ def registrati():
         if len(password) < 6:
             flash("La password deve avere almeno 6 caratteri.")
             return render_template("registrati.html")
+        if request.form.get("accetto") != "1":
+            flash("Per registrarti devi accettare Privacy, Termini e regole del Wallet ALX.")
+            return render_template("registrati.html")
 
         eta = eta_da(data_nascita)
         if eta is None or eta < 18:
@@ -4990,6 +4994,8 @@ def registrati():
             conn.commit()
             session["utente_id"] = nuovo_id
             session["utente_nome"] = nome
+            esegui(conn, "UPDATE utenti SET termini_il = ? WHERE id = ?", (adesso_it().isoformat(), nuovo_id))
+            conn.commit()
             try:
                 _invia_verifica(conn, nuovo_id, nome, email)
             except Exception:
