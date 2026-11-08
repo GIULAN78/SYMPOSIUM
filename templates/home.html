@@ -16,7 +16,7 @@
         <h1>Symposium</h1>
         <p class="sottotitolo">Iscriviti a Symposium e crea il tuo banchetto</p>
         {% if utente_nome %}
-            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('profilo_utente', utente_id=utente_id) }}">Profilo</a> · <a href="{{ url_for('home') }}">Banchetti</a> · <a href="{{ url_for('preferiti') }}">Preferiti</a> · <a href="{{ url_for('amici') }}">Amici</a> · <a href="{{ url_for('elenco_messaggi') }}">Messaggi</a> · <a href="{{ url_for('pagina_premium') }}">⭐ Premium</a> · <a href="{{ url_for('impostazioni') }}">Impostazioni</a> · <a href="{{ url_for('wallet') }}">💰 Wallet ALX</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
+            <p class="nav-utente">Ciao, {{ utente_nome }} · <a href="{{ url_for('profilo_utente', utente_id=utente_id) }}">Profilo</a> · <a href="{{ url_for('home') }}">Banchetti</a> · <a href="{{ url_for('cerchi') }}">🔮 Cerchio magico</a> · <a href="{{ url_for('preferiti') }}">Preferiti</a> · <a href="{{ url_for('amici') }}">Amici</a> · <a href="{{ url_for('elenco_messaggi') }}">Messaggi</a> · <a href="{{ url_for('pagina_premium') }}">⭐ Premium</a> · <a href="{{ url_for('impostazioni') }}">Impostazioni</a> · <a href="{{ url_for('wallet') }}">💰 Wallet ALX</a> · <a href="{{ url_for('esci') }}">Esci</a></p>
             <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo') }}">+ Crea il tuo banchetto</a>
             <a class="btn-nuovo pulsante-wallet" href="{{ url_for('wallet') }}">💰 Wallet ALX</a>
         {% else %}
@@ -80,7 +80,7 @@
                         <button type="submit" class="cuore" title="Preferito">{{ '❤️' if t.id in preferiti_ids else '🤍' }}</button>
                     </form>
                     {% endif %}
-                    {% if t.tipologia and TIPOLOGIE_PER_SLUG.get(t.tipologia) %}<p class="tipologia-etichetta">{{ TIPOLOGIE_PER_SLUG[t.tipologia].emoji }} {{ TIPOLOGIE_PER_SLUG[t.tipologia].nome }}</p>{% endif %}{% if t.in_comune %}<p class="in-comune-et">✨ +{{ t.in_comune }} interessi in comune</p>{% endif %}
+                    {% if t.tipologia and TIPOLOGIE_PER_SLUG.get(t.tipologia) %}<p class="tipologia-etichetta">{{ TIPOLOGIE_PER_SLUG[t.tipologia].emoji }} {{ TIPOLOGIE_PER_SLUG[t.tipologia].nome }}</p>{% endif %}{% if t.in_comune %}<p class="in-comune-et">✨ +{{ t.in_comune }} interessi in comune</p>{% endif %}{% if t.cerchio_id %}<p class="tipologia-etichetta">🔮 Cerchio magico</p>{% endif %}
                     <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a>{% if t.min_partecipanti and t.iscritti >= t.min_partecipanti %} <span class="badge badge-conf">Confermato</span>{% endif %}{% if t.esclusivo %} <span class="badge badge-esc">⭐ Banchetto degli dei</span>{% endif %}{% if t.su_richiesta %} <span class="badge badge-esc">🔒 Su richiesta</span>{% endif %}</h2>
                     <p class="locale">📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}
                         {% if t.voti_locale %}<span class="badge badge-grad">👍 {{ t.voti_pos|percento(t.voti_locale) }}%</span>{% endif %}

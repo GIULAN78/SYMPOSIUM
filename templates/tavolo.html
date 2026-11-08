@@ -39,6 +39,12 @@
                     {% endif %}
                 </div>
                 {% endif %}
+                {% set cm = cerchio_di(tavolo.id) %}{% if cm %}<div class="box-cerchio">
+                    <p>🔮 <strong>Cerchio magico{% if cm.nome %} · «{{ cm.nome }}»{% endif %}</strong>{% if cm.riservati %} · {{ cm.riservati }} posti riservati ai membri{% endif %}</p>
+                    {% if cm.mio_stato == 'attesa' %}<p>Hai un posto riservato fino al {{ cm.scade }}.</p>
+                    <form method="POST" action="{{ url_for('cerchio_posto', tavolo_id=tavolo.id, azione='conferma') }}" style="display:inline"><button type="submit" class="btn-iscriviti">✓ Confermo</button></form>
+                    <form method="POST" action="{{ url_for('cerchio_posto', tavolo_id=tavolo.id, azione='rifiuta') }}" style="display:inline"><button type="submit" class="btn-annulla">✕ Non posso</button></form>{% endif %}
+                </div>{% endif %}
                 {% set fl = foto_locale(tavolo.id) %}{% if fl %}<div class="foto-locale"><img src="{{ fl.url }}" alt="{{ tavolo.locale_nome }}" referrerpolicy="no-referrer"><p class="attrib-foto">📷 Foto del locale{% if fl.autore %}: {% if fl.autore_url %}<a href="{{ fl.autore_url }}" target="_blank" rel="noopener">{{ fl.autore }}</a>{% else %}{{ fl.autore }}{% endif %}{% endif %} · Google Maps</p></div>{% endif %}
                 {% set tip_slug = tipologia_di(tavolo.id) %}{% set tip = TIPOLOGIE_PER_SLUG.get(tip_slug) %}
                 {% if tip %}<div class="riquadro-tipologia">

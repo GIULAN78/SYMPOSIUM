@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cerchio magico - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('cerchi') }}">← I miei cerchi</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        <h3 class="titolo-sezione">🔮 {{ c.nome }}</h3>
+        <a class="btn-nuovo" href="{{ link_crea }}">+ Crea un banchetto per il cerchio</a>
+
+        <h3 class="titolo-sezione">Membri</h3>
+        {% for m in membri %}
+        <div class="riga-invito">
+            {% if m.foto_url %}<img class="av-inv" src="{{ m.foto_url }}" alt="">{% else %}<span class="av-inv av-vuoto">{{ (m.nome or '?')[:1] }}</span>{% endif %}
+            <div class="info-part"><strong>{{ m.nome }}</strong>
+                <p class="interessi">{% if m.id == c.creatore_id %}Ha creato il cerchio{% elif m.stato == 'accettato' %}Membro{% else %}Invito in attesa{% endif %}</p></div>
+        </div>
+        {% endfor %}
+
+        {% if sono_creatore %}
+        <h3 class="titolo-sezione">Invita un amico</h3>
+        {% if not amici_liberi %}<p class="vuoto">Non ci sono altri amici da invitare.</p>{% endif %}
+        {% for a in amici_liberi %}
+        <div class="riga-invito">
+            <div class="info-part"><strong>{{ a.nome }}</strong></div>
+            <form method="POST" action="{{ url_for('cerchio_invita', cerchio_id=c.id, utente=a.id) }}"><button type="submit" class="btn-piccolo">Invita</button></form>
+        </div>
+        {% endfor %}
+
+        <h3 class="titolo-sezione">Modello del banchetto</h3>
+        <form class="form-tavolo" method="POST" action="{{ url_for('cerchio_modello', cerchio_id=c.id) }}">
+            <label for="tema">Tema</label>
+            <input type="text" id="tema" name="tema" value="{{ c.modello_tema or '' }}" placeholder="Es. La cena del venerdì">
+            <label for="tipologia">Tipologia</label>
+            <select id="tipologia" name="tipologia">
+                <option value="">Scegli la tipologia...</option>
+                {% for gruppo, elenco in GRUPPI_TIPOLOGIE %}<optgroup label="{{ gruppo }}">{% for t in elenco %}<option value="{{ t.slug }}" {% if c.modello_tipologia == t.slug %}selected{% endif %}>{{ t.emoji }} {{ t.nome }}</option>{% endfor %}</optgroup>{% endfor %}
+            </select>
+            <label for="locale">Locale</label>
+            <input type="text" id="locale" name="locale" value="{{ c.modello_locale or '' }}">
+            <label for="citta">Città</label>
+            <input type="text" id="citta" name="citta" value="{{ c.modello_citta or '' }}">
+            <label for="posti">Posti totali</label>
+            <input type="number" id="posti" name="posti" min="2" max="20" value="{{ c.modello_posti or 8 }}">
+            <label for="eta_min">Età minima</label>
+            <input type="number" id="eta_min" name="eta_min" min="18" max="99" value="{{ c.modello_eta_min or 18 }}">
+            <label for="eta_max">Età massima</label>
+            <input type="number" id="eta_max" name="eta_max" min="18" max="99" value="{{ c.modello_eta_max or 65 }}">
+            <label for="quando">Quando vi trovate di solito</label>
+            <input type="text" id="quando" name="quando" value="{{ c.modello_quando or '' }}" placeholder="Es. ogni venerdì sera">
+            <button type="submit" class="btn-nuovo">Salva il modello</button>
+        </form>
+        {% else %}
+        {% if c.modello_quando %}<p class="nota">Di solito: {{ c.modello_quando }}</p>{% endif %}
+        <form method="POST" action="{{ url_for('cerchio_esci', cerchio_id=c.id) }}" onsubmit="return confirm('Uscire da questo cerchio?');">
+            <button type="submit" class="btn-annulla">Esci dal cerchio</button>
+        </form>
+        {% endif %}
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

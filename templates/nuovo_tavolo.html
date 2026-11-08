@@ -44,6 +44,7 @@
             <input type="text" id="locale" name="locale" value="{{ request.args.get('locale', '') }}" placeholder="Nome del ristorante o locale" required>
             <input type="hidden" name="lat" value="{{ request.args.get('lat', '') }}">
             <input type="hidden" name="lng" value="{{ request.args.get('lng', '') }}">
+            <input type="hidden" name="cerchio_id" value="{{ request.args.get('cerchio', '') }}">
             <a class="link-dettaglio" href="/locali">🔎 Cerca nei locali d'Italia</a>
 
             <label for="citta">Città</label>
@@ -96,6 +97,21 @@
         d.textContent = o.getAttribute("data-descr") || "";
         if (chk && o.getAttribute("data-dei") === "1") { chk.checked = true; }
     });
+})();
+</script>
+<script>
+(function () {
+    var p = new URLSearchParams(window.location.search);
+    function imposta(id, chiave) {
+        var v = p.get(chiave), e = document.getElementById(id);
+        if (v && e) { e.value = v; }
+    }
+    imposta("tema", "tema");
+    imposta("posti_totali", "posti");
+    imposta("eta_min", "eta_min");
+    imposta("eta_max", "eta_max");
+    var t = p.get("tipologia"), s = document.getElementById("tipologia");
+    if (t && s) { s.value = t; s.dispatchEvent(new Event("change")); }
 })();
 </script>
 </body>

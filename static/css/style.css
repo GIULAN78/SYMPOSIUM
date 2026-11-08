@@ -1555,3 +1555,17 @@ header h1 {
     border: 2px solid #b8860b;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 4px 10px rgba(0, 0, 0, 0.45);
 }
+
+/* Cerchio magico */
+.box-cerchio {
+    margin: 0.6rem 0;
+    padding: 0.5rem 0.8rem;
+    border-radius: 10px;
+    border: 2px solid var(--oro);
+    background: #fff3c4;
+    color: #0f2468;
+}
+
+.box-cerchio p {
+    margin: 0.2rem 0;
+}

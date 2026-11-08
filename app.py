@@ -201,6 +201,42 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "tavoli", "cerchio_id", "INTEGER")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS cerchi (
+            id {pk},
+            nome TEXT NOT NULL,
+            creatore_id INTEGER,
+            creato_il TEXT,
+            modello_tema TEXT,
+            modello_tipologia TEXT,
+            modello_locale TEXT,
+            modello_citta TEXT,
+            modello_posti INTEGER,
+            modello_eta_min INTEGER,
+            modello_eta_max INTEGER,
+            modello_quando TEXT
+        )
+    """)
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS cerchio_membri (
+            id {pk},
+            cerchio_id INTEGER,
+            utente_id INTEGER,
+            stato TEXT,
+            UNIQUE (cerchio_id, utente_id)
+        )
+    """)
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS cerchio_posti (
+            id {pk},
+            tavolo_id INTEGER,
+            utente_id INTEGER,
+            stato TEXT,
+            scade_il TEXT,
+            UNIQUE (tavolo_id, utente_id)
+        )
+    """)
     aggiungi_colonna(conn, "utenti", "inviti_extra", "INTEGER DEFAULT 0")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS inviti (
@@ -819,7 +855,7 @@ def home():
     conn = get_db()
     tavoli = esegui(conn, """
         SELECT t.id, t.tema, t.data_ora, t.obiettivo, t.posti_totali, t.citta, t.foto_url,
-               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng, t.esclusivo, t.su_richiesta, t.tipologia,
+               t.min_partecipanti, t.eta_min, t.eta_max, t.organizzatore_id, t.lat, t.lng, t.esclusivo, t.su_richiesta, t.tipologia, t.cerchio_id,
                l.nome AS locale_nome,
                u.nome AS organizzatore_nome,
                u.foto_url AS organizzatore_foto,
@@ -3154,6 +3190,294 @@ def pulsante_crea(risposta):
     return risposta
 
 
+def _riservati(conn, tavolo_id, escludi_uid=0):
+    r = esegui(conn, """
+        SELECT COUNT(*) AS n FROM cerchio_posti
+        WHERE tavolo_id = ? AND stato = 'attesa' AND scade_il > ? AND utente_id != ?
+          AND utente_id NOT IN (SELECT utente_id FROM iscrizioni WHERE tavolo_id = ?)
+    """, (tavolo_id, adesso_it().isoformat(), escludi_uid, tavolo_id)).fetchone()
+    return int(r["n"]) if r else 0
+
+
+def _cerchio_di(tavolo_id):
+    uid = session.get("utente_id")
+    try:
+        conn = get_db()
+        t = esegui(conn, """
+            SELECT t.cerchio_id, c.nome FROM tavoli t LEFT JOIN cerchi c ON c.id = t.cerchio_id
+            WHERE t.id = ?
+        """, (tavolo_id,)).fetchone()
+        if not t or not t["cerchio_id"]:
+            conn.close()
+            return None
+        res = {"nome": t["nome"] or "", "riservati": _riservati(conn, tavolo_id), "mio_stato": None, "scade": ""}
+        if uid:
+            if e_iscritto(conn, tavolo_id, uid):
+                res["mio_stato"] = "confermato"
+            else:
+                m = esegui(conn, "SELECT stato, scade_il FROM cerchio_posti WHERE tavolo_id = ? AND utente_id = ?",
+                           (tavolo_id, uid)).fetchone()
+                if m:
+                    res["mio_stato"] = m["stato"]
+                    if m["stato"] == "attesa" and m["scade_il"]:
+                        if m["scade_il"] <= adesso_it().isoformat():
+                            res["mio_stato"] = "scaduto"
+                        else:
+                            res["scade"] = datetime.fromisoformat(m["scade_il"]).strftime("%d/%m alle %H:%M")
+        conn.close()
+        return res
+    except Exception:
+        return None
+
+
+app.jinja_env.globals["cerchio_di"] = _cerchio_di
+
+
+def _crea_posti_cerchio(conn, cerchio_id, tavolo_id, uid, tema, posti):
+    ok = esegui(conn, "SELECT 1 AS ok FROM cerchio_membri WHERE cerchio_id = ? AND utente_id = ? AND stato = 'accettato'",
+                (cerchio_id, uid)).fetchone()
+    c = esegui(conn, "SELECT nome FROM cerchi WHERE id = ?", (cerchio_id,)).fetchone()
+    if not ok or not c:
+        return
+    esegui(conn, "UPDATE tavoli SET cerchio_id = ? WHERE id = ?", (cerchio_id, tavolo_id))
+    membri = esegui(conn, """
+        SELECT utente_id FROM cerchio_membri
+        WHERE cerchio_id = ? AND stato = 'accettato' AND utente_id != ? ORDER BY id
+    """, (cerchio_id, uid)).fetchall()
+    scade = (adesso_it() + timedelta(hours=48)).isoformat()
+    for m in membri[:max(0, int(posti) - 1)]:
+        esegui(conn, "INSERT INTO cerchio_posti (tavolo_id, utente_id, stato, scade_il) VALUES (?, ?, 'attesa', ?)",
+               (tavolo_id, m["utente_id"], scade))
+        notifica(conn, m["utente_id"], "cerchio", tema,
+                 (session.get("utente_nome") or "Un amico") + " ha creato un banchetto per il cerchio «" + c["nome"]
+                 + "»: hai un posto riservato per 48 ore",
+                 url_for("dettaglio_tavolo", tavolo_id=tavolo_id), uid)
+
+
+def _membro_accettato(conn, cerchio_id, uid):
+    return esegui(conn, "SELECT 1 AS ok FROM cerchio_membri WHERE cerchio_id = ? AND utente_id = ? AND stato = 'accettato'",
+                  (cerchio_id, uid)).fetchone() is not None
+
+
+@app.route("/cerchi")
+@login_richiesto
+def cerchi():
+    uid = session["utente_id"]
+    conn = get_db()
+    mie = esegui(conn, """
+        SELECT c.id, c.nome,
+               (SELECT COUNT(*) FROM cerchio_membri x WHERE x.cerchio_id = c.id AND x.stato = 'accettato') AS membri
+        FROM cerchi c JOIN cerchio_membri m ON m.cerchio_id = c.id
+        WHERE m.utente_id = ? AND m.stato = 'accettato' ORDER BY c.id DESC
+    """, (uid,)).fetchall()
+    inviti = esegui(conn, """
+        SELECT c.id, c.nome, u.nome AS da
+        FROM cerchio_membri m JOIN cerchi c ON c.id = m.cerchio_id JOIN utenti u ON u.id = c.creatore_id
+        WHERE m.utente_id = ? AND m.stato = 'invitato'
+    """, (uid,)).fetchall()
+    conn.close()
+    return render_template("cerchi.html", mie=mie, inviti=inviti)
+
+
+@app.route("/cerchi/nuovo", methods=["POST"])
+@login_richiesto
+def cerchio_nuovo():
+    uid = session["utente_id"]
+    nome = request.form.get("nome", "").strip()[:60]
+    if not nome:
+        flash("Dai un nome al cerchio.")
+        return redirect(url_for("cerchi"))
+    conn = get_db()
+    n = int(esegui(conn, "SELECT COUNT(*) AS n FROM cerchi WHERE creatore_id = ?", (uid,)).fetchone()["n"])
+    if n >= 3:
+        conn.close()
+        flash("Puoi creare al massimo 3 cerchi.")
+        return redirect(url_for("cerchi"))
+    cid = inserisci(conn, "INSERT INTO cerchi (nome, creatore_id, creato_il) VALUES (?, ?, ?)",
+                    (nome, uid, adesso_it().isoformat()))
+    esegui(conn, "INSERT INTO cerchio_membri (cerchio_id, utente_id, stato) VALUES (?, ?, 'accettato')", (cid, uid))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("cerchio_dettaglio", cerchio_id=cid))
+
+
+@app.route("/cerchio/<int:cerchio_id>")
+@login_richiesto
+def cerchio_dettaglio(cerchio_id):
+    uid = session["utente_id"]
+    conn = get_db()
+    c = esegui(conn, """
+        SELECT id, nome, creatore_id, modello_tema, modello_tipologia, modello_locale, modello_citta,
+               modello_posti, modello_eta_min, modello_eta_max, modello_quando
+        FROM cerchi WHERE id = ?
+    """, (cerchio_id,)).fetchone()
+    if not c or not _membro_accettato(conn, cerchio_id, uid):
+        conn.close()
+        abort(404)
+    membri = esegui(conn, """
+        SELECT u.id, u.nome, u.foto_url, m.stato
+        FROM cerchio_membri m JOIN utenti u ON u.id = m.utente_id
+        WHERE m.cerchio_id = ? ORDER BY m.id
+    """, (cerchio_id,)).fetchall()
+    amici_liberi = []
+    if c["creatore_id"] == uid:
+        amici_liberi = esegui(conn, """
+            SELECT u.id, u.nome FROM amici a JOIN utenti u ON u.id = a.amico_id
+            WHERE a.utente_id = ? AND u.id NOT IN (SELECT utente_id FROM cerchio_membri WHERE cerchio_id = ?)
+            ORDER BY u.nome
+        """, (uid, cerchio_id)).fetchall()
+    conn.close()
+    link_crea = url_for("nuovo_tavolo", cerchio=c["id"], tipologia=c["modello_tipologia"] or None,
+                        posti=c["modello_posti"], eta_min=c["modello_eta_min"], eta_max=c["modello_eta_max"],
+                        tema=c["modello_tema"] or None, locale=c["modello_locale"] or None,
+                        citta=c["modello_citta"] or None)
+    return render_template("cerchio.html", c=c, membri=membri, amici_liberi=amici_liberi,
+                           sono_creatore=(c["creatore_id"] == uid), link_crea=link_crea)
+
+
+@app.route("/cerchio/<int:cerchio_id>/invita/<int:utente>", methods=["POST"])
+@login_richiesto
+def cerchio_invita(cerchio_id, utente):
+    uid = session["utente_id"]
+    conn = get_db()
+    c = esegui(conn, "SELECT nome, creatore_id FROM cerchi WHERE id = ?", (cerchio_id,)).fetchone()
+    if not c or c["creatore_id"] != uid:
+        conn.close()
+        abort(403)
+    amico = esegui(conn, "SELECT 1 AS ok FROM amici WHERE utente_id = ? AND amico_id = ?", (uid, utente)).fetchone()
+    gia = esegui(conn, "SELECT 1 AS ok FROM cerchio_membri WHERE cerchio_id = ? AND utente_id = ?",
+                 (cerchio_id, utente)).fetchone()
+    n = int(esegui(conn, "SELECT COUNT(*) AS n FROM cerchio_membri WHERE cerchio_id = ?", (cerchio_id,)).fetchone()["n"])
+    if not amico:
+        flash("Puoi invitare solo i tuoi amici.")
+    elif gia:
+        flash("È già nel cerchio o ha già un invito.")
+    elif n >= 10:
+        flash("Il cerchio può avere al massimo 10 membri.")
+    else:
+        esegui(conn, "INSERT INTO cerchio_membri (cerchio_id, utente_id, stato) VALUES (?, ?, 'invitato')",
+               (cerchio_id, utente))
+        notifica(conn, utente, "cerchio", c["nome"],
+                 (session.get("utente_nome") or "Un amico") + " ti invita nel cerchio magico «" + c["nome"] + "»",
+                 url_for("cerchi"), uid)
+        conn.commit()
+        flash("Invito inviato.")
+    conn.close()
+    return redirect(url_for("cerchio_dettaglio", cerchio_id=cerchio_id))
+
+
+@app.route("/cerchio/<int:cerchio_id>/risposta", methods=["POST"])
+@login_richiesto
+def cerchio_risposta(cerchio_id):
+    uid = session["utente_id"]
+    azione = request.form.get("azione", "")
+    conn = get_db()
+    r = esegui(conn, "SELECT stato FROM cerchio_membri WHERE cerchio_id = ? AND utente_id = ?",
+               (cerchio_id, uid)).fetchone()
+    if r and r["stato"] == "invitato":
+        if azione == "accetta":
+            esegui(conn, "UPDATE cerchio_membri SET stato = 'accettato' WHERE cerchio_id = ? AND utente_id = ?",
+                   (cerchio_id, uid))
+            flash("Sei entrato nel cerchio.")
+        else:
+            esegui(conn, "DELETE FROM cerchio_membri WHERE cerchio_id = ? AND utente_id = ?", (cerchio_id, uid))
+            flash("Invito rifiutato.")
+        conn.commit()
+    conn.close()
+    return redirect(url_for("cerchi"))
+
+
+@app.route("/cerchio/<int:cerchio_id>/modello", methods=["POST"])
+@login_richiesto
+def cerchio_modello(cerchio_id):
+    uid = session["utente_id"]
+    conn = get_db()
+    c = esegui(conn, "SELECT creatore_id FROM cerchi WHERE id = ?", (cerchio_id,)).fetchone()
+    if not c or c["creatore_id"] != uid:
+        conn.close()
+        abort(403)
+    tip = request.form.get("tipologia", "")
+    if tip not in TIPOLOGIE_PER_SLUG:
+        tip = ""
+
+    def numero(campo, minimo, massimo, predefinito):
+        try:
+            v = int(request.form.get(campo, ""))
+        except ValueError:
+            return predefinito
+        return v if minimo <= v <= massimo else predefinito
+
+    posti = numero("posti", 2, 20, 8)
+    emin = numero("eta_min", 18, 99, 18)
+    emax = numero("eta_max", 18, 99, 65)
+    if emin > emax:
+        emin, emax = 18, 65
+    esegui(conn, """
+        UPDATE cerchi SET modello_tema = ?, modello_tipologia = ?, modello_locale = ?, modello_citta = ?,
+                          modello_posti = ?, modello_eta_min = ?, modello_eta_max = ?, modello_quando = ?
+        WHERE id = ?
+    """, (request.form.get("tema", "").strip()[:120], tip, request.form.get("locale", "").strip()[:120],
+          request.form.get("citta", "").strip()[:80], posti, emin, emax,
+          request.form.get("quando", "").strip()[:120], cerchio_id))
+    conn.commit()
+    conn.close()
+    flash("Modello salvato.")
+    return redirect(url_for("cerchio_dettaglio", cerchio_id=cerchio_id))
+
+
+@app.route("/cerchio/<int:cerchio_id>/esci", methods=["POST"])
+@login_richiesto
+def cerchio_esci(cerchio_id):
+    uid = session["utente_id"]
+    conn = get_db()
+    c = esegui(conn, "SELECT creatore_id FROM cerchi WHERE id = ?", (cerchio_id,)).fetchone()
+    if c and c["creatore_id"] != uid:
+        esegui(conn, "DELETE FROM cerchio_membri WHERE cerchio_id = ? AND utente_id = ?", (cerchio_id, uid))
+        conn.commit()
+        flash("Sei uscito dal cerchio.")
+    conn.close()
+    return redirect(url_for("cerchi"))
+
+
+@app.route("/tavolo/<int:tavolo_id>/cerchio/<azione>", methods=["POST"])
+@login_richiesto
+def cerchio_posto(tavolo_id, azione):
+    uid = session["utente_id"]
+    conn = get_db()
+    r = esegui(conn, "SELECT stato FROM cerchio_posti WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid)).fetchone()
+    if not r or r["stato"] != "attesa" or azione not in ("conferma", "rifiuta"):
+        conn.close()
+        flash("Non hai un posto riservato da confermare.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    if azione == "rifiuta":
+        esegui(conn, "UPDATE cerchio_posti SET stato = 'rifiutato' WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid))
+        conn.commit()
+        conn.close()
+        flash("Il tuo posto è tornato libero.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    t = esegui(conn, "SELECT posti_totali, organizzatore_id, tema FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    if not t:
+        conn.close()
+        abort(404)
+    iscritti = int(esegui(conn, "SELECT COUNT(*) AS n FROM iscrizioni WHERE tavolo_id = ?", (tavolo_id,)).fetchone()["n"])
+    if iscritti + _riservati(conn, tavolo_id, uid) >= t["posti_totali"] and not e_iscritto(conn, tavolo_id, uid):
+        conn.close()
+        flash("Il banchetto è completo.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    if not e_iscritto(conn, tavolo_id, uid):
+        esegui(conn, "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
+               (tavolo_id, uid, datetime.now().isoformat()))
+    esegui(conn, "UPDATE cerchio_posti SET stato = 'confermato' WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, uid))
+    if t["organizzatore_id"] != uid:
+        notifica(conn, t["organizzatore_id"], "iscrizione", t["tema"],
+                 (session.get("utente_nome") or "Un membro") + " ha confermato il posto del cerchio",
+                 url_for("dettaglio_tavolo", tavolo_id=tavolo_id), uid)
+    conn.commit()
+    conn.close()
+    flash("Posto confermato.")
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -3711,6 +4035,9 @@ def nuovo_tavolo():
         raggio_km = int(_r) if _r in ("10", "30", "50", "100") else None
         gusto_limite = 1 if request.form.get("gusto_limite") == "1" else 0
         esegui(conn, "UPDATE tavoli SET raggio_km = ?, gusto_limite = ? WHERE id = ?", (raggio_km, gusto_limite, tavolo_id))
+        cerchio_sel = request.form.get("cerchio_id", "")
+        if cerchio_sel.isdigit():
+            _crea_posti_cerchio(conn, int(cerchio_sel), tavolo_id, utente_id, tema, posti)
         if request.form.get("su_richiesta") == "1":
             esegui(conn, "UPDATE tavoli SET su_richiesta = 1 WHERE id = ?", (tavolo_id,))
         if esclusivo_sel and e_premium(conn, utente_id):
@@ -3820,7 +4147,7 @@ def iscriviti(tavolo_id):
             conn.close()
             flash("Questo banchetto è per chi condivide un interesse con la tipologia: " + ", ".join(sorted(richiesti)[:5]) + ".")
             return redirect(request.referrer or url_for("home"))
-    pieno = tavolo["iscritti"] >= tavolo["posti_totali"]
+    pieno = tavolo["iscritti"] + _riservati(conn, tavolo_id, session["utente_id"]) >= tavolo["posti_totali"]
     if pieno or extra["su_richiesta"]:
         stato_r = "coda" if pieno else "attesa"
         try:

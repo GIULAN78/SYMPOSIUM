@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cerchio magico - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        <h3 class="titolo-sezione">🔮 Cerchio magico</h3>
+        <p class="nota">Un gruppo di amici che organizza i soliti banchetti: posti riservati ai membri, tutti gli altri aperti a chiunque.</p>
+        {% if inviti %}
+        <h3 class="titolo-sezione">Inviti ricevuti</h3>
+        {% for i in inviti %}
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>{{ i.nome }}</h2>
+            <p class="nota">Invitato da {{ i.da }}</p>
+            <form method="POST" action="{{ url_for('cerchio_risposta', cerchio_id=i.id) }}" style="display:inline"><input type="hidden" name="azione" value="accetta"><button type="submit" class="btn-iscriviti">✓ Accetto</button></form>
+            <form method="POST" action="{{ url_for('cerchio_risposta', cerchio_id=i.id) }}" style="display:inline"><input type="hidden" name="azione" value="rifiuta"><button type="submit" class="btn-annulla">✕ Rifiuto</button></form>
+        </div></div>
+        {% endfor %}
+        {% endif %}
+        <h3 class="titolo-sezione">I miei cerchi</h3>
+        {% if not mie %}<p class="vuoto">Non fai ancora parte di nessun cerchio.</p>{% endif %}
+        {% for c in mie %}
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2><a class="titolo-link" href="{{ url_for('cerchio_dettaglio', cerchio_id=c.id) }}">{{ c.nome }}</a></h2>
+            <p class="nota">{{ c.membri }} membri</p>
+        </div></div>
+        {% endfor %}
+        <h3 class="titolo-sezione">Crea un cerchio</h3>
+        <form class="form-tavolo" method="POST" action="{{ url_for('cerchio_nuovo') }}">
+            <label for="nome">Nome del cerchio</label>
+            <input type="text" id="nome" name="nome" maxlength="60" placeholder="Es. I compagni del venerdì" required>
+            <button type="submit" class="btn-nuovo">Crea il cerchio</button>
+        </form>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>
