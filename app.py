@@ -1018,8 +1018,28 @@ def home():
     for t in tavoli:
         ti = interessi_tavolo(t.get("tipologia"), t.get("tema"))
         t["in_comune"] = len(miei_int & set_interessi(", ".join(ti))) if ti and miei_int else 0
+    for t in tavoli:
+        t["affinita"] = 0
+    _uid_a = session.get("utente_id")
+    if _uid_a and tavoli:
+        try:
+            _ca = get_db()
+            _marc = ",".join("?" * len(tavoli))
+            _org = {r["id"]: r["organizzatore_id"] for r in esegui(
+                _ca, "SELECT id, organizzatore_id FROM tavoli WHERE id IN (%s)" % _marc,
+                tuple(t["id"] for t in tavoli)).fetchall()}
+            _voti = {r["a_utente"]: float(r["m"]) for r in esegui(
+                _ca, "SELECT a_utente, AVG(punteggio) AS m FROM compatibilita WHERE da_utente = ? GROUP BY a_utente",
+                (_uid_a,)).fetchall()}
+            _ca.close()
+            for t in tavoli:
+                m = _voti.get(_org.get(t["id"]))
+                if m is not None:
+                    t["affinita"] = 1 if m >= 4 else (-1 if m <= 2 else 0)
+        except Exception:
+            pass
     if request.args.get("suggeriti") == "1":
-        tavoli.sort(key=lambda t: (-t["in_comune"], t["data_ora"] or ""))
+        tavoli.sort(key=lambda t: (-t["affinita"], -t["in_comune"], t["data_ora"] or ""))
     pos = pos_da_cookie()
     if pos:
         tavoli = [dict(t) for t in tavoli]
