@@ -2191,6 +2191,7 @@ def dati_extra():
         "alx_premium": alx_somma(conn, "tipo = ?", ("premium",)),
         "alx_dei": alx_somma(conn, "tipo = ?", ("banchetto_dei",)),
         "alx_paganti": paganti,
+        **_alx_wallet_stats(conn),
         "premium_attivi": conta(conn, "utenti", "premium_fino > ?", (adesso_it().isoformat(),)),
     }
     conn.close()
@@ -4938,6 +4939,24 @@ def _profilo_extra(uid):
 
 
 app.jinja_env.globals["profilo_extra"] = _profilo_extra
+
+
+def _alx_wallet_stats(conn):
+    def uno(sql):
+        try:
+            r = esegui(conn, sql).fetchone()
+            return int(r["n"] or 0)
+        except Exception:
+            return 0
+
+    return {
+        "alx_circolazione": uno("SELECT COALESCE(SUM(saldo), 0) AS n FROM wallet_alx"),
+        "alx_assegnati": uno("SELECT COALESCE(SUM(importo), 0) AS n FROM wallet_alx_mov WHERE tipo = 'ricarica'"),
+        "alx_rimborsati": uno("SELECT COALESCE(SUM(importo), 0) AS n FROM wallet_alx_mov WHERE tipo = 'rimborso'"),
+        "rimborsi_coda": uno("SELECT COUNT(*) AS n FROM rimborsi_pendenti"),
+        "wallet_aperti": uno("SELECT COUNT(*) AS n FROM wallet_alx"),
+        "wallet_con_saldo": uno("SELECT COUNT(*) AS n FROM wallet_alx WHERE saldo > 0"),
+    }
 
 
 @app.route("/miei-tavoli")
