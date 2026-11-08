@@ -5202,6 +5202,62 @@ def _servizi_collegati():
     return risultato
 
 
+PAGINA_ERRORE = """<!DOCTYPE html>
+<html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>@T@ - Symposium</title><link rel="stylesheet" href="/static/css/style.css"><meta name="theme-color" content="#0d2a78"></head>
+<body><header><h1><a class="logo-link" href="/">Symposium</a></h1></header>
+<main><h3 class="titolo-sezione">@T@</h3><p class="nota">@X@</p>
+<p><a class="btn-nuovo" href="/">Vai alla pagina iniziale</a></p></main></body></html>"""
+
+
+def _gestore_errore(codice, titolo, testo):
+    def gestore(e):
+        return PAGINA_ERRORE.replace("@T@", titolo).replace("@X@", testo), codice
+    return gestore
+
+
+for _c, _t, _x in ((403, "Accesso negato", "Non hai i permessi per aprire questa pagina."),
+                   (404, "Pagina non trovata", "L'indirizzo non esiste o il banchetto è stato eliminato."),
+                   (500, "Qualcosa è andato storto", "Si è verificato un problema: riprova tra qualche istante.")):
+    app.register_error_handler(_c, _gestore_errore(_c, _t, _x))
+
+
+@app.route("/robots.txt")
+def robots():
+    from flask import Response as _Resp
+    corpo = "User-agent: *\nAllow: /benvenuto\nAllow: /hai-un-locale\nAllow: /privacy\nAllow: /termini\nAllow: /faq\nDisallow: /\n"
+    return _Resp(corpo, mimetype="text/plain")
+
+
+@app.after_request
+def meta_condivisione(risposta):
+    try:
+        if risposta.status_code != 200 or risposta.mimetype != "text/html":
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        if "og:title" in testo or "<head>" not in testo:
+            return risposta
+        import html as _h
+        import re as _r
+        m = _r.search(r"<title>(.*?)</title>", testo, _r.S)
+        titolo = _h.escape(_h.unescape(m.group(1).strip())) if m else "Symposium"
+        base = request.url_root.rstrip("/")
+        if base.startswith("http://") and "localhost" not in base and "127.0.0.1" not in base:
+            base = "https://" + base[len("http://"):]
+        meta = (
+            '<meta property="og:site_name" content="Symposium">'
+            '<meta property="og:type" content="website">'
+            '<meta property="og:title" content="' + titolo + '">'
+            '<meta property="og:description" content="Banchetti con persone nuove: scegli un banchetto vicino a te o creane uno.">'
+            '<meta property="og:image" content="' + base + '/static/icons/icon-512.png">'
+            '<meta name="twitter:card" content="summary">'
+        )
+        risposta.set_data(testo.replace("<head>", "<head>\n    " + meta, 1))
+    except Exception:
+        pass
+    return risposta
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
