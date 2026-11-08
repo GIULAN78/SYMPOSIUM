@@ -2444,6 +2444,10 @@ def prezzi_ctx():
     d = {
         "prezzo_premium": prezzo_alx(conn, "prezzo_premium_mensile", 1000),
         "prezzo_dei": prezzo_alx(conn, "prezzo_banchetto_dei", 200),
+        "inviti_settimana_v": prezzo_alx(conn, "inviti_settimana", 30),
+        "pacchetto_inviti_n_v": prezzo_alx(conn, "pacchetto_inviti_n", 20),
+        "prezzo_pacchetto_v": prezzo_alx(conn, "prezzo_pacchetto_inviti", 100),
+        "limite_google_v": prezzo_alx(conn, "limite_google_giorno", 300),
         "pag_attivo": pagamento_attivo(conn),
         "premium_fino": None,
     }
@@ -2505,6 +2509,18 @@ def admin_prezzi():
     conn = get_db()
     salva_prezzo_alx(conn, "prezzo_premium_mensile", pp)
     salva_prezzo_alx(conn, "prezzo_banchetto_dei", pd)
+    for campo, chiave, massimo in (
+        ("inviti_settimana", "inviti_settimana", 1000),
+        ("pacchetto_inviti_n", "pacchetto_inviti_n", 1000),
+        ("prezzo_pacchetto", "prezzo_pacchetto_inviti", 100000),
+        ("limite_google", "limite_google_giorno", 100000),
+    ):
+        try:
+            valore = int(request.form.get(campo, ""))
+        except ValueError:
+            continue
+        if 0 <= valore <= massimo:
+            salva_prezzo_alx(conn, chiave, valore)
     conn.commit()
     conn.close()
     flash("Prezzi aggiornati.")
