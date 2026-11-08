@@ -1483,3 +1483,23 @@ header h1 {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 /* Fine tema metallico */
+
+/* Foto locale */
+.foto-locale {
+    margin: 0.6rem 0;
+}
+
+.foto-locale img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 8 / 3;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 3px solid var(--oro);
+}
+
+.attrib-foto {
+    margin: 0.2rem 0 0;
+    font-size: 0.75rem;
+    color: var(--testo);
+}

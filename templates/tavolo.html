@@ -39,6 +39,7 @@
                     {% endif %}
                 </div>
                 {% endif %}
+                {% set fl = foto_locale(tavolo.id) %}{% if fl %}<div class="foto-locale"><img src="{{ fl.url }}" alt="{{ tavolo.locale_nome }}" referrerpolicy="no-referrer"><p class="attrib-foto">📷 Foto del locale{% if fl.autore %}: {% if fl.autore_url %}<a href="{{ fl.autore_url }}" target="_blank" rel="noopener">{{ fl.autore }}</a>{% else %}{{ fl.autore }}{% endif %}{% endif %} · Google Maps</p></div>{% endif %}
                 {% set tip_slug = tipologia_di(tavolo.id) %}{% set tip = TIPOLOGIE_PER_SLUG.get(tip_slug) %}
                 {% if tip %}<div class="riquadro-tipologia">
                     {% if IMM_TIP.get(tip.slug) %}<img src="{{ IMM_TIP[tip.slug] }}" alt="{{ tip.nome }}"><span class="rt-titolo">{{ tip.emoji }} {{ tip.nome }}</span>{% endif %}

@@ -200,6 +200,13 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "eta_max", "INTEGER")
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
+    aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    esegui(conn, """
+        CREATE TABLE IF NOT EXISTS google_uso (
+            giorno TEXT PRIMARY KEY,
+            n INTEGER DEFAULT 0
+        )
+    """)
     aggiungi_colonna(conn, "tavoli", "raggio_km", "INTEGER")
     aggiungi_colonna(conn, "tavoli", "gusto_limite", "INTEGER DEFAULT 0")
     esegui(conn, """
@@ -2803,6 +2810,95 @@ def _limiti_di(tavolo_id):
 
 
 app.jinja_env.globals["limiti_di"] = _limiti_di
+
+
+_CACHE_FOTO = {}
+
+
+def _google_json(metodo, url, corpo=None, campi=None):
+    import json
+    import urllib.request
+    chiave = os.environ.get("GOOGLE_PLACES_KEY", "").strip()
+    if not chiave:
+        return None
+    intest = {"Content-Type": "application/json", "X-Goog-Api-Key": chiave}
+    if campi:
+        intest["X-Goog-FieldMask"] = campi
+    dati = json.dumps(corpo).encode() if corpo is not None else None
+    richiesta = urllib.request.Request(url, data=dati, headers=intest, method=metodo)
+    try:
+        with urllib.request.urlopen(richiesta, timeout=8) as r:
+            return json.loads(r.read().decode() or "null")
+    except Exception:
+        return None
+
+
+def _google_conta(conn):
+    giorno = adesso_it().strftime("%Y-%m-%d")
+    riga = esegui(conn, "SELECT n FROM google_uso WHERE giorno = ?", (giorno,)).fetchone()
+    limite = prezzo_alx(conn, "limite_google_giorno", 300)
+    usate = int(riga["n"]) if riga and riga["n"] else 0
+    if usate >= limite:
+        return False
+    if riga:
+        esegui(conn, "UPDATE google_uso SET n = n + 1 WHERE giorno = ?", (giorno,))
+    else:
+        esegui(conn, "INSERT INTO google_uso (giorno, n) VALUES (?, 1)", (giorno,))
+    conn.commit()
+    return True
+
+
+def _foto_locale(tavolo_id):
+    import time
+    if not os.environ.get("GOOGLE_PLACES_KEY", "").strip():
+        return None
+    ora = time.time()
+    voce = _CACHE_FOTO.get(tavolo_id)
+    if voce and voce[0] > ora:
+        return voce[1]
+    risultato = None
+    try:
+        conn = get_db()
+        t = esegui(conn, """
+            SELECT t.lat, t.lng, t.citta, l.id AS lid, l.nome, l.google_place_id
+            FROM tavoli t LEFT JOIN locali l ON t.locale_id = l.id
+            WHERE t.id = ?
+        """, (tavolo_id,)).fetchone()
+        if t and t["nome"]:
+            pid = t["google_place_id"]
+            if not pid and _google_conta(conn):
+                corpo = {"textQuery": ((t["nome"] or "") + " " + (t["citta"] or "")).strip(),
+                         "languageCode": "it", "maxResultCount": 1}
+                if t["lat"] is not None and t["lng"] is not None:
+                    corpo["locationBias"] = {"circle": {"center": {"latitude": float(t["lat"]),
+                                                                    "longitude": float(t["lng"])}, "radius": 800.0}}
+                d = _google_json("POST", "https://places.googleapis.com/v1/places:searchText", corpo, "places.id")
+                if d and d.get("places"):
+                    pid = d["places"][0].get("id")
+                    if pid:
+                        esegui(conn, "UPDATE locali SET google_place_id = ? WHERE id = ?", (pid, t["lid"]))
+                        conn.commit()
+            if pid and _google_conta(conn):
+                d = _google_json("GET", "https://places.googleapis.com/v1/places/" + pid, None, "photos")
+                foto = (d or {}).get("photos") or []
+                if foto and foto[0].get("name") and _google_conta(conn):
+                    m = _google_json("GET", "https://places.googleapis.com/v1/" + foto[0]["name"]
+                                     + "/media?maxHeightPx=800&skipHttpRedirect=true")
+                    if m and m.get("photoUri"):
+                        autori = foto[0].get("authorAttributions") or []
+                        risultato = {
+                            "url": m["photoUri"],
+                            "autore": autori[0].get("displayName", "") if autori else "",
+                            "autore_url": autori[0].get("uri", "") if autori else "",
+                        }
+        conn.close()
+    except Exception:
+        risultato = None
+    _CACHE_FOTO[tavolo_id] = (ora + 3000, risultato)
+    return risultato
+
+
+app.jinja_env.globals["foto_locale"] = _foto_locale
 
 
 @app.route("/miei-tavoli")
