@@ -64,6 +64,7 @@ FASCE = [
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "chiave-di-sviluppo")
+app.jinja_env.globals["chiave_debole"] = not os.environ.get("SECRET_KEY", "").strip()
 app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "symposium.db")
 

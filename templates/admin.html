@@ -113,6 +113,7 @@
             {% endfor %}
         </div></div>
 
+        {% if chiave_debole %}<p class="flash">⚠️ La chiave segreta dell'app non è impostata su Render: chiunque conosca quella di sviluppo potrebbe falsificare gli accessi. Imposta la variabile SECRET_KEY nell'Environment del servizio SYMPOSIUM.</p>{% endif %}
         <h3 class="titolo-sezione">Numeri generali</h3>
         <div class="griglia-stat">
             <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>
