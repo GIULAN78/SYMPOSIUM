@@ -64,6 +64,23 @@
             {% if q or citta or solo_eta or solo_confermati or fasce_sel %}<a class="link-dettaglio" href="{{ url_for('home') }}">Azzera</a>{% endif %}
         </form>
 
+        {% set mb = miei_banchetti_home() %}
+        {% if mb and not (q or citta or solo_eta or solo_confermati or fasce_sel) %}
+        <h3 class="titolo-sezione">I tuoi banchetti</h3>
+        <div class="lista-tavoli">
+            {% for t in mb %}
+            <div class="card-tavolo">
+                <h2><a class="titolo-link" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">{{ t.tema }}</a></h2>
+                <p>📍 {{ t.locale_nome or "Locale da definire" }}{% if t.citta %}, {{ t.citta }}{% endif %}</p>
+                <p>🗓️ {{ t.data_ora|data_it }}</p>
+                <p>{{ t.iscritti }} / {{ t.posti_totali }} posti occupati{% if t.organizzatore_id == utente_id %} · ⭐ Lo organizzi tu{% endif %}</p>
+            </div>
+            {% endfor %}
+        </div>
+        <p><a class="link-dettaglio" href="{{ url_for('miei_tavoli') }}">Vedi tutti i miei banchetti</a></p>
+        <h3 class="titolo-sezione">Tutti i banchetti</h3>
+        {% endif %}
+
         {% if tavoli|length == 0 %}
             <p class="vuoto">{% if q or citta or solo_eta or solo_confermati or fasce_sel %}Nessun banchetto corrisponde alla ricerca.{% else %}Nessun banchetto disponibile al momento. Creane uno tu!{% endif %}</p>
         {% endif %}

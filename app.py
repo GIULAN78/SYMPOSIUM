@@ -3945,6 +3945,32 @@ def promemoria_pref():
     return render_template("promemoria.html", p=p)
 
 
+def miei_banchetti_home():
+    uid = session.get("utente_id")
+    if not uid:
+        return []
+    try:
+        conn = get_db()
+        righe = esegui(conn, """
+            SELECT t.id, t.tema, t.data_ora, t.posti_totali, t.citta, t.organizzatore_id,
+                   l.nome AS locale_nome,
+                   (SELECT COUNT(*) FROM iscrizioni x WHERE x.tavolo_id = t.id) AS iscritti
+            FROM tavoli t
+            JOIN iscrizioni i ON i.tavolo_id = t.id AND i.utente_id = ?
+            LEFT JOIN locali l ON t.locale_id = l.id
+            WHERE t.data_ora >= ?
+            ORDER BY t.data_ora ASC
+            LIMIT 6
+        """, (uid, adesso_it().replace(tzinfo=None).isoformat(timespec="minutes"))).fetchall()
+        conn.close()
+        return righe
+    except Exception:
+        return []
+
+
+app.jinja_env.globals["miei_banchetti_home"] = miei_banchetti_home
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
