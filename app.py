@@ -4829,6 +4829,65 @@ def classifiche_visibilita():
     return redirect(url_for("classifiche"))
 
 
+def _semaforo(uid):
+    try:
+        conn = get_db()
+        ass = int(esegui(conn, "SELECT COUNT(*) AS n FROM assenze WHERE utente_id = ?", (uid,)).fetchone()["n"])
+        righe = esegui(conn, """
+            SELECT t.data_ora FROM iscrizioni i JOIN tavoli t ON t.id = i.tavolo_id
+            WHERE i.utente_id = ?
+              AND NOT EXISTS (SELECT 1 FROM assenze a WHERE a.tavolo_id = t.id AND a.utente_id = i.utente_id)
+        """, (uid,)).fetchall()
+        conn.close()
+        serate = sum(1 for r in righe if e_concluso(r["data_ora"]))
+    except Exception:
+        return {"icona": "⚪", "testo": "Nuovo"}
+    tot = serate + ass
+    if tot == 0:
+        return {"icona": "⚪", "testo": "Nuovo"}
+    if ass == 0:
+        return {"icona": "🟢", "testo": "Alta affidabilità"}
+    if ass / tot <= 0.2:
+        return {"icona": "🟠", "testo": "Affidabilità media"}
+    return {"icona": "🔴", "testo": "Affidabilità bassa"}
+
+
+app.jinja_env.globals["semaforo"] = _semaforo
+
+
+@app.route("/tavolo/<int:tavolo_id>/escludi/<int:utente>", methods=["POST"])
+@login_richiesto
+def escludi_partecipante(tavolo_id, utente):
+    uid = session["utente_id"]
+    conn = get_db()
+    t = esegui(conn, "SELECT organizzatore_id, tema, data_ora FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    if not t or t["organizzatore_id"] != uid:
+        conn.close()
+        abort(403)
+    if utente == uid or not e_iscritto(conn, tavolo_id, utente):
+        conn.close()
+        flash("Questa persona non è tra i partecipanti.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    if e_concluso(t["data_ora"]):
+        conn.close()
+        flash("Il banchetto è concluso: non puoi più togliere partecipanti.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    if _semaforo(utente)["icona"] not in ("🟠", "🔴"):
+        conn.close()
+        flash("Puoi togliere solo chi ha un'affidabilità media o bassa.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    esegui(conn, "DELETE FROM iscrizioni WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, utente))
+    esegui(conn, "DELETE FROM ospiti_tavolo WHERE tavolo_id = ? AND utente_id = ?", (tavolo_id, utente))
+    notifica(conn, utente, "annullo", t["tema"],
+             "L'organizzatore ti ha tolto dal banchetto «" + (t["tema"] or "") + "».",
+             url_for("dettaglio_tavolo", tavolo_id=tavolo_id), uid)
+    promuovi_coda(conn, tavolo_id)
+    conn.commit()
+    conn.close()
+    flash("Partecipante tolto: il posto è di nuovo libero.")
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -5615,16 +5674,27 @@ def annulla_iscrizione(tavolo_id):
     if tavolo["organizzatore_id"] == session["utente_id"]:
         flash("L'organizzatore non può annullare l'iscrizione al proprio banchetto.")
     else:
+        _tt = esegui(conn, "SELECT data_ora FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+        _tardi = False
+        try:
+            _dt = datetime.fromisoformat(str(_tt["data_ora"]))
+            _tardi = _dt - timedelta(hours=6) <= adesso_it().replace(tzinfo=None) < _dt
+        except (TypeError, ValueError):
+            pass
         esegui(conn,
                "DELETE FROM iscrizioni WHERE tavolo_id = ? AND utente_id = ?",
                (tavolo_id, session["utente_id"]))
+        if _tardi and not esegui(conn, "SELECT 1 AS ok FROM assenze WHERE tavolo_id = ? AND utente_id = ?",
+                                 (tavolo_id, session["utente_id"])).fetchone():
+            esegui(conn, "INSERT INTO assenze (tavolo_id, utente_id, creato_il) VALUES (?, ?, ?)",
+                   (tavolo_id, session["utente_id"], datetime.now().isoformat()))
         riga_t = esegui(conn, "SELECT tema FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
         notifica(conn, tavolo["organizzatore_id"], "annullo", riga_t["tema"],
                  f"{session.get('utente_nome')} ha annullato la partecipazione",
                  url_for("dettaglio_tavolo", tavolo_id=tavolo_id), session["utente_id"])
         promuovi_coda(conn, tavolo_id)
         conn.commit()
-        flash("Iscrizione annullata.")
+        flash("Hai annullato a meno di 6 ore dalla serata: conta come assenza." if _tardi else "Iscrizione annullata.")
     conn.close()
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
