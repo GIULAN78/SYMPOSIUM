@@ -1604,3 +1604,17 @@ header h1 {
     color: inherit;
     text-decoration: none;
 }
+
+/* Gradi Ospite ed Eroe */
+.badge-ospite, .ospite {
+    background: #fffdf6;
+    color: #0f2468;
+    border: 1px solid #c8971f;
+}
+
+.badge-eroe, .eroe {
+    background: linear-gradient(135deg, #fff3b0 0%, #ffd04d 28%, #c8971f 52%, #ffe27a 74%, #b8860b 100%);
+    color: #0f2468;
+    border: 1px solid #b8860b;
+    font-weight: 700;
+}

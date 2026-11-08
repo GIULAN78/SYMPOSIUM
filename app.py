@@ -860,12 +860,16 @@ def info_badge(utente_id):
     punti = partecipate * 10 + organizzate * 25 + int(n_val) * 5
 
     badge = []
+    if serate < 1:
+        badge.append({"nome": "Ospite", "classe": "ospite", "icona": "⚪"})
     if serate >= 5:
         badge.append({"nome": "Convitato", "classe": "tablerplus", "icona": "🔵"})
     elif serate >= 1:
         badge.append({"nome": "Commensale", "classe": "tabler", "icona": "🟠"})
     if organizzate >= 3:
         badge.append({"nome": "Simposiarca", "classe": "manager", "icona": "🟣"})
+    if serate >= 15 and organizzate >= 5:
+        badge.append({"nome": "Eroe", "classe": "eroe", "icona": "🔱"})
 
     prossimi = []
     if serate < 1:
@@ -874,6 +878,8 @@ def info_badge(utente_id):
         prossimi.append(f"Ancora {5 - serate} serate per il grado di Convitato")
     if organizzate < 3:
         prossimi.append(f"Ancora {3 - organizzate} serate organizzate per il grado di Simposiarca")
+    if serate >= 5 and not (serate >= 15 and organizzate >= 5):
+        prossimi.append(f"Per il grado di Eroe servono ancora {max(0, 15 - serate)} serate e {max(0, 5 - organizzate)} serate organizzate")
 
     principale = badge[-1] if badge else None
     return {
