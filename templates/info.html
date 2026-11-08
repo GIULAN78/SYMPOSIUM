@@ -22,7 +22,7 @@
 
             {% if pagina == 'privacy' %}
                 <h2>Informativa sulla privacy</h2>
-                <p class="nota">Bozza in revisione. Ultimo aggiornamento: ottobre 2026.</p>
+                <p class="nota">Bozza in revisione. Ultimo aggiornamento: novembre 2026.</p>
 
                 <h3>Chi tratta i dati</h3>
                 <p>Il titolare del trattamento è il gestore di Symposium.{% if contatto %} Contatto: {{ contatto }}.{% endif %}</p>
@@ -32,7 +32,7 @@
                     <li>Dati dell'account: nome, email, password (conservata solo in forma cifrata), data di nascita, città.</li>
                     <li>Foto personale (necessaria per creare un banchetto o prendere posto: deve ritrarre te stesso) e dati facoltativi del profilo: professione, formazione, descrizione, interessi, genere, lingue, segno zodiacale, archetipo e Instagram (tutti facoltativi, visibili agli altri utenti registrati).</li>
                     <li>Attività sul servizio: banchetti creati, iscrizioni, messaggi della chat dei banchetti, valutazioni, presenze, amici, utenti bloccati, segnalazioni, notifiche.</li>
-                    <li>Inviti e cerchi magici: inviti inviati e ricevuti, cerchi di amici e posti riservati. Se colleghi il tuo account Alexandria, il saldo e i movimenti ALX.</li>
+                    <li>Inviti e cerchi magici: inviti inviati e ricevuti, cerchi di amici e posti riservati. Wallet ALX: saldo e movimenti in ALX; se colleghi un account Alexandria, anche il collegamento tra i due account.</li>
                 </ul>
 
                 <h3>A cosa servono</h3>
@@ -47,6 +47,7 @@
                 <ul>
                     <li>Render (hosting e database, server nell'Unione Europea).</li>
                     <li>Cloudflare R2 (archiviazione delle foto).</li>
+                    <li>Alexandria (invio delle email di servizio e, se colleghi il tuo account, scambio del saldo ALX): riceve l'indirizzo del destinatario e il testo del messaggio.</li>
                     <li>Servizi di notifica del browser (Google, Apple, Mozilla), solo se attivi le notifiche sul telefono: ricevono un identificativo tecnico del dispositivo e il testo della notifica.</li>
                     <li>Google Maps Platform (foto e identificativo dei locali): riceve solo il nome del locale e la città, mai dati personali degli utenti.</li>
                     <li>OpenStreetMap (mappa e ricerca dei locali): per mostrare un banchetto sulla mappa vengono inviati il nome del locale e la città, mai dati personali.</li>
@@ -62,15 +63,18 @@
                 <p>Usiamo cookie tecnici necessari, che non richiedono consenso: la sessione per restare collegati, la sicurezza dei moduli, la tua scelta sui cookie e, solo se attivi la posizione, la posizione approssimativa. Non usiamo cookie pubblicitari né di profilazione.</p>
                 <p>Alcune funzioni caricano servizi di terzi che ricevono il tuo indirizzo IP: i caratteri di Google (Google Fonts) e le mappe (OpenStreetMap e unpkg.com). Li carichiamo solo se dai il consenso dal banner. La scelta dura 6 mesi e puoi cambiarla in qualsiasi momento dal pulsante 🍪 in basso a sinistra oppure <a href="#" onclick="apriCookie(); return false;">da qui</a>.</p>
 
+                <h3>Sicurezza e registri</h3>
+                <p>Per proteggere gli accessi conserviamo per 24 ore l'indirizzo IP e l'email dei tentativi di accesso falliti. Conserviamo la data dell'ultimo accesso (per i promemoria) e, se attivi le notifiche sul telefono, l'identificativo tecnico del dispositivo. Alla registrazione salviamo data e ora dell'accettazione di Privacy e Termini.</p>
+
                 <h3>Per quanto tempo</h3>
-                <p>Fino alla cancellazione dell'account. Dalle Impostazioni puoi eliminare il tuo account in qualsiasi momento: i dati vengono cancellati.</p>
+                <p>Fino alla cancellazione dell'account. I registri dei tentativi di accesso falliti vengono cancellati dopo 24 ore. Dalle Impostazioni puoi eliminare il tuo account in qualsiasi momento: i dati vengono cancellati.</p>
 
                 <h3>I tuoi diritti</h3>
-                <p>Puoi chiedere accesso, rettifica e cancellazione dei dati, e opporti al trattamento. Puoi modificare il profilo e cancellare l'account direttamente dalle Impostazioni. Hai diritto di presentare reclamo al Garante per la protezione dei dati personali.</p>
+                <p>Puoi chiedere accesso, rettifica, cancellazione, limitazione e portabilità dei dati, opporti al trattamento e revocare il consenso.{% if contatto %} Per esercitare i tuoi diritti scrivi a {{ contatto }}.{% endif %} Puoi modificare il profilo e cancellare l'account direttamente dalle Impostazioni. Hai diritto di presentare reclamo al Garante per la protezione dei dati personali.</p>
 
             {% elif pagina == 'termini' %}
                 <h2>Termini di utilizzo</h2>
-                <p class="nota">Bozza in revisione. Ultimo aggiornamento: ottobre 2026.</p>
+                <p class="nota">Bozza in revisione. Ultimo aggiornamento: novembre 2026.</p>
 
                 <h3>Cos'è Symposium</h3>
                 <p>Symposium è una piattaforma che permette di organizzare e partecipare a banchetti in locali pubblici per conoscere persone con interessi in comune. Symposium non è parte degli incontri e non gestisce i locali.</p>
