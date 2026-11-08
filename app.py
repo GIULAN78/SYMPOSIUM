@@ -202,6 +202,14 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS login_tentativi (
+            id {pk},
+            email TEXT,
+            ip TEXT,
+            creato_il TEXT
+        )
+    """)
     aggiungi_colonna(conn, "tavoli", "in_evidenza_fino", "TEXT")
     aggiungi_colonna(conn, "locali", "partner", "INTEGER DEFAULT 0")
     aggiungi_colonna(conn, "locali", "sconto", "TEXT")
@@ -5131,6 +5139,24 @@ def evidenza_tavolo(tavolo_id):
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
+app.config.update(
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),
+)
+
+
+@app.after_request
+def intestazioni_sicurezza(risposta):
+    risposta.headers.setdefault("X-Content-Type-Options", "nosniff")
+    risposta.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    risposta.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    risposta.headers.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=()")
+    if os.environ.get("RENDER"):
+        risposta.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return risposta
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -5536,14 +5562,28 @@ def accedi():
         password = request.form["password"]
 
         conn = get_db()
+        _ip = (request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0]).strip()
+        _lim = (adesso_it() - timedelta(minutes=15)).isoformat()
+        _falliti = int(esegui(conn, "SELECT COUNT(*) AS n FROM login_tentativi WHERE creato_il > ? AND (email = ? OR ip = ?)",
+                              (_lim, email, _ip)).fetchone()["n"])
+        if _falliti >= 8:
+            conn.close()
+            flash("Troppi tentativi di accesso: riprova tra 15 minuti.")
+            return render_template("accedi.html")
         utente = esegui(conn, "SELECT * FROM utenti WHERE email = ?", (email,)).fetchone()
-        conn.close()
 
         if utente and utente["password_hash"] and check_password_hash(utente["password_hash"], password):
+            esegui(conn, "DELETE FROM login_tentativi WHERE email = ?", (email,))
+            conn.commit()
+            conn.close()
             session["utente_id"] = utente["id"]
             session["utente_nome"] = utente["nome"]
             return redirect(url_for("home"))
 
+        esegui(conn, "INSERT INTO login_tentativi (email, ip, creato_il) VALUES (?, ?, ?)", (email, _ip, adesso_it().isoformat()))
+        esegui(conn, "DELETE FROM login_tentativi WHERE creato_il < ?", ((adesso_it() - timedelta(days=1)).isoformat(),))
+        conn.commit()
+        conn.close()
         flash("Email o password non corretti.")
 
     return render_template("accedi.html")
