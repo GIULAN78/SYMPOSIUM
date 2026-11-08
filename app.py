@@ -201,6 +201,7 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "classifica_visibile", "INTEGER")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS match_origine (
             id {pk},
@@ -4733,6 +4734,99 @@ def _match_di(altro_id):
 
 
 app.jinja_env.globals["match_di"] = _match_di
+
+
+def _classifica_dati(conn, giorni=None):
+    ora = adesso_it().replace(tzinfo=None)
+    limite = (ora - timedelta(days=giorni)).isoformat(timespec="minutes") if giorni else None
+    righe = esegui(conn, """
+        SELECT i.utente_id, t.data_ora, t.organizzatore_id
+        FROM iscrizioni i JOIN tavoli t ON t.id = i.tavolo_id
+        WHERE NOT EXISTS (SELECT 1 FROM assenze a WHERE a.tavolo_id = t.id AND a.utente_id = i.utente_id)
+    """).fetchall()
+    stat = {}
+    for r in righe:
+        if not e_concluso(r["data_ora"]):
+            continue
+        if limite and str(r["data_ora"]) < limite:
+            continue
+        voce = stat.setdefault(r["utente_id"], {"part": 0, "org": 0})
+        if r["organizzatore_id"] == r["utente_id"]:
+            voce["org"] += 1
+        else:
+            voce["part"] += 1
+    nval = {}
+    if not giorni:
+        for r in esegui(conn, "SELECT utente_id, COUNT(*) AS n FROM valutazioni_locale GROUP BY utente_id").fetchall():
+            nval[r["utente_id"]] = int(r["n"])
+    ass = {r["utente_id"]: int(r["n"]) for r in esegui(
+        conn, "SELECT utente_id, COUNT(*) AS n FROM assenze GROUP BY utente_id").fetchall()}
+    utenti = {r["id"]: r for r in esegui(conn, """
+        SELECT id, nome, foto_url, citta FROM utenti
+        WHERE COALESCE(sospeso, 0) = 0 AND COALESCE(classifica_visibile, 1) = 1
+    """).fetchall()}
+    voci = []
+    for uid, st in stat.items():
+        u = utenti.get(uid)
+        if not u:
+            continue
+        serate = st["part"] + st["org"]
+        punti = st["part"] * 10 + st["org"] * 25 + nval.get(uid, 0) * 5
+        if serate >= 15 and st["org"] >= 5:
+            grado = "🔱 Eroe"
+        elif st["org"] >= 3:
+            grado = "🟣 Simposiarca"
+        elif serate >= 5:
+            grado = "🔵 Convitato"
+        else:
+            grado = "🟠 Commensale"
+        a = ass.get(uid, 0)
+        voci.append({"id": uid, "nome": u["nome"], "foto_url": u["foto_url"], "citta": u["citta"] or "",
+                     "punti": punti, "serate": serate, "org": st["org"], "grado": grado,
+                     "presenza": round(100 * serate / (serate + a)) if (serate + a) else 100})
+    return voci
+
+
+@app.route("/classifiche")
+@login_richiesto
+def classifiche():
+    uid = session["utente_id"]
+    periodo = "mese" if request.args.get("periodo") == "mese" else "sempre"
+    conn = get_db()
+    io = utente_per_id(conn, uid)
+    citta_nome = ((io["citta"] if io else "") or "").strip()
+    mia_citta = citta_nome.lower()
+    solo_citta = request.args.get("citta") == "1" and bool(mia_citta)
+    dati = _classifica_dati(conn, 30 if periodo == "mese" else None)
+    sempre = dati if periodo == "sempre" else _classifica_dati(conn, None)
+    r = esegui(conn, "SELECT classifica_visibile FROM utenti WHERE id = ?", (uid,)).fetchone()
+    visibile = (r is None) or r["classifica_visibile"] is None or int(r["classifica_visibile"]) == 1
+    conn.close()
+
+    def filtra(v):
+        return [x for x in v if not solo_citta or x["citta"].strip().lower() == mia_citta]
+
+    dati = filtra(dati)
+    sempre = filtra(sempre)
+    punti = sorted(dati, key=lambda x: (-x["punti"], x["nome"] or ""))
+    organizzatori = sorted([x for x in dati if x["org"] > 0], key=lambda x: (-x["org"], -x["punti"]))
+    affidabili = sorted([x for x in sempre if x["serate"] >= 3], key=lambda x: (-x["presenza"], -x["serate"]))
+    mia_pos = next((i + 1 for i, x in enumerate(punti) if x["id"] == uid), None)
+    return render_template("classifiche.html", punti=punti[:10], organizzatori=organizzatori[:10],
+                           affidabili=affidabili[:10], mia_pos=mia_pos, totale=len(punti), periodo=periodo,
+                           solo_citta=solo_citta, citta_nome=citta_nome, visibile=visibile, uid=uid)
+
+
+@app.route("/classifiche/visibilita", methods=["POST"])
+@login_richiesto
+def classifiche_visibilita():
+    valore = 1 if request.form.get("visibile") == "1" else 0
+    conn = get_db()
+    esegui(conn, "UPDATE utenti SET classifica_visibile = ? WHERE id = ?", (valore, session["utente_id"]))
+    conn.commit()
+    conn.close()
+    flash("Ora compari nelle classifiche." if valore else "Non compari più nelle classifiche.")
+    return redirect(url_for("classifiche"))
 
 
 @app.route("/miei-tavoli")

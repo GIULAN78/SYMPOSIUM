@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classifiche - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        {% macro riga(i, c, dettaglio, uid) %}
+        <div class="riga-invito">
+            <strong>{% if i == 1 %}🥇{% elif i == 2 %}🥈{% elif i == 3 %}🥉{% else %}{{ i }}°{% endif %}</strong>
+            {% if c.foto_url %}<img class="av-inv" src="{{ c.foto_url }}" alt="">{% else %}<span class="av-inv av-vuoto">{{ (c.nome or '?')[:1] }}</span>{% endif %}
+            <div class="info-part">
+                <strong><a class="titolo-link-chiaro" href="{{ url_for('profilo_utente', utente_id=c.id) }}">{{ c.nome }}</a>{% if c.id == uid %} (tu){% endif %}</strong>
+                <p class="interessi">{{ c.grado }}{% if c.citta %} · {{ c.citta }}{% endif %} · {{ dettaglio }}</p>
+            </div>
+        </div>
+        {% endmacro %}
+        <h3 class="titolo-sezione">🏆 Classifiche</h3>
+        <div class="toggle-vista">
+            <a class="{{ 'attivo' if periodo == 'sempre' }}" href="{{ url_for('classifiche', periodo='sempre', citta=1 if solo_citta else None) }}">Sempre</a>
+            <a class="{{ 'attivo' if periodo == 'mese' }}" href="{{ url_for('classifiche', periodo='mese', citta=1 if solo_citta else None) }}">Ultimi 30 giorni</a>
+            {% if citta_nome %}<a class="{{ 'attivo' if solo_citta }}" href="{{ url_for('classifiche', periodo=periodo, citta=None if solo_citta else 1) }}">📍 {{ citta_nome }}</a>{% endif %}
+        </div>
+        {% if mia_pos %}<p class="nota">Sei al {{ mia_pos }}° posto su {{ totale }}.</p>{% endif %}
+
+        <h3 class="titolo-sezione">Punti</h3>
+        {% if not punti %}<p class="vuoto">Ancora nessuno in classifica: partecipa a un banchetto concluso.</p>{% endif %}
+        {% for c in punti %}{{ riga(loop.index, c, c.punti ~ ' punti', uid) }}{% endfor %}
+
+        <h3 class="titolo-sezione">Organizzatori</h3>
+        {% if not organizzatori %}<p class="vuoto">Nessun banchetto organizzato e concluso.</p>{% endif %}
+        {% for c in organizzatori %}{{ riga(loop.index, c, c.org ~ (' banchetto organizzato' if c.org == 1 else ' banchetti organizzati'), uid) }}{% endfor %}
+
+        <h3 class="titolo-sezione">Più affidabili</h3>
+        <p class="nota">Percentuale di presenze, per chi ha almeno 3 serate.</p>
+        {% if not affidabili %}<p class="vuoto">Servono almeno 3 serate per comparire.</p>{% endif %}
+        {% for c in affidabili %}{{ riga(loop.index, c, '🟢 ' ~ c.presenza ~ '% di presenze', uid) }}{% endfor %}
+
+        <form method="POST" action="{{ url_for('classifiche_visibilita') }}" class="form-ricerca">
+            <label class="riga-check"><input type="checkbox" name="visibile" value="1" {% if visibile %}checked{% endif %}> Compari nelle classifiche (nome, foto, città, grado e punti)</label>
+            <button type="submit" class="btn-piccolo">Salva</button>
+        </form>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>
