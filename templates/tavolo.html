@@ -71,6 +71,7 @@
                 <p class="data">🗓️ {{ tavolo.data_ora|data_it }}</p>
                 <p class="data"><a class="link-dettaglio" href="{{ url_for('calendario_tavolo', tavolo_id=tavolo.id) }}">📅 Aggiungi al calendario</a></p>
                 {% set sp = spesa_di(tavolo.id) %}{% if sp %}<p class="data">💶 circa {{ sp }} € a persona · si paga al locale</p>{% endif %}
+                {% set dc = dopo_di(tavolo.id) %}{% if dc %}<p class="data">🥂 Dopo il banchetto: {{ dc }}</p>{% endif %}
                 {% if tavolo.eta_min is not none and tavolo.eta_max is not none %}
                 <p>👥 Età ammessa: {{ tavolo.eta_min }}-{{ tavolo.eta_max }}</p>
                 {% endif %}
@@ -165,6 +166,16 @@
             {% for o in og.lista %}<p>{{ o.nome }} · accompagna {{ o.host }}</p>{% endfor %}
             {% if og.mio %}<form method="POST" action="{{ url_for('ospite_rimuovi', tavolo_id=tavolo.id) }}"><button type="submit" class="btn-annulla">Rimuovi il mio ospite</button></form>
             {% elif og.puo %}<form method="POST" action="{{ url_for('ospite_aggiungi', tavolo_id=tavolo.id) }}"><input type="text" name="nome" maxlength="40" placeholder="Nome del tuo ospite (maggiorenne)" required> <button type="submit" class="btn-piccolo">+1 Porta un ospite</button></form>{% endif %}
+        </div>{% endif %}
+        {% set rc = ricordi_info(tavolo.id) %}{% if rc.foto or rc.puo %}<div class="box-cerchio">
+            <p>📸 <strong>Ricordi del banchetto</strong></p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+            {% for f in rc.foto %}<div>
+                <img src="{{ f.foto_url }}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:2px solid #c8971f">
+                {% if f.mio %}<form method="POST" action="{{ url_for('ricordo_elimina', tavolo_id=tavolo.id, ricordo_id=f.id) }}"><button type="submit" class="btn-annulla">Elimina</button></form>{% endif %}
+            </div>{% endfor %}
+            </div>
+            {% if rc.puo %}<form method="POST" enctype="multipart/form-data" action="{{ url_for('ricordo_aggiungi', tavolo_id=tavolo.id) }}"><input type="file" name="foto" accept="image/*" required> <button type="submit" class="btn-piccolo">Aggiungi un ricordo</button></form>{% endif %}
         </div>{% endif %}
         <div class="box-cerchio" id="socrate">
             <p>🏛️ <strong>Le domande di Socrate</strong></p>

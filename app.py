@@ -202,6 +202,16 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
     esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS ricordi_tavolo (
+            id {pk},
+            tavolo_id INTEGER,
+            utente_id INTEGER,
+            foto_url TEXT,
+            creato_il TEXT
+        )
+    """)
+    aggiungi_colonna(conn, "tavoli", "dopo_cena", "TEXT")
+    esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS ospiti_tavolo (
             id {pk},
             tavolo_id INTEGER,
@@ -4500,6 +4510,77 @@ def ospite_rimuovi(tavolo_id):
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
+def _dopo_di(tavolo_id):
+    try:
+        conn = get_db()
+        r = esegui(conn, "SELECT dopo_cena FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+        conn.close()
+        return ((r["dopo_cena"] or "").strip() or None) if r else None
+    except Exception:
+        return None
+
+
+app.jinja_env.globals["dopo_di"] = _dopo_di
+
+
+def _ricordi_info(tavolo_id):
+    uid = session.get("utente_id")
+    vuoto = {"foto": [], "puo": False}
+    try:
+        if not uid:
+            return vuoto
+        conn = get_db()
+        if not e_iscritto(conn, tavolo_id, uid):
+            conn.close()
+            return vuoto
+        t = esegui(conn, "SELECT data_ora FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+        passato = bool(t and str(t["data_ora"]) <= adesso_it().replace(tzinfo=None).isoformat(timespec="minutes"))
+        righe = esegui(conn, "SELECT id, utente_id, foto_url FROM ricordi_tavolo WHERE tavolo_id = ? ORDER BY id",
+                       (tavolo_id,)).fetchall()
+        miei = sum(1 for r in righe if r["utente_id"] == uid)
+        res = {"foto": [{"id": r["id"], "foto_url": r["foto_url"], "mio": r["utente_id"] == uid} for r in righe],
+               "puo": passato and miei < 5}
+        conn.close()
+        return res
+    except Exception:
+        return vuoto
+
+
+app.jinja_env.globals["ricordi_info"] = _ricordi_info
+
+
+@app.route("/tavolo/<int:tavolo_id>/ricordo", methods=["POST"])
+@login_richiesto
+def ricordo_aggiungi(tavolo_id):
+    info_r = _ricordi_info(tavolo_id)
+    if not info_r["puo"]:
+        flash("Puoi aggiungere ricordi solo dopo la serata e fino a 5 foto.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    foto = salva_foto(request.files.get("foto"), "tavoli")
+    if not foto:
+        flash("Foto non valida: scegli un'immagine.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    conn = get_db()
+    esegui(conn, "INSERT INTO ricordi_tavolo (tavolo_id, utente_id, foto_url, creato_il) VALUES (?, ?, ?, ?)",
+           (tavolo_id, session["utente_id"], foto, adesso_it().isoformat()))
+    conn.commit()
+    conn.close()
+    flash("Ricordo aggiunto.")
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
+@app.route("/tavolo/<int:tavolo_id>/ricordo/<int:ricordo_id>/elimina", methods=["POST"])
+@login_richiesto
+def ricordo_elimina(tavolo_id, ricordo_id):
+    conn = get_db()
+    esegui(conn, "DELETE FROM ricordi_tavolo WHERE id = ? AND tavolo_id = ? AND utente_id = ?",
+           (ricordo_id, tavolo_id, session["utente_id"]))
+    conn.commit()
+    conn.close()
+    flash("Ricordo eliminato.")
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -5089,6 +5170,9 @@ def nuovo_tavolo():
             spesa = None
         if spesa is not None and 1 <= spesa <= 500:
             esegui(conn, "UPDATE tavoli SET spesa_indicativa = ? WHERE id = ?", (spesa, tavolo_id))
+        dopo = request.form.get("dopo_cena", "").strip()[:120]
+        if dopo:
+            esegui(conn, "UPDATE tavoli SET dopo_cena = ? WHERE id = ?", (dopo, tavolo_id))
         cerchio_sel = request.form.get("cerchio_id", "")
         if cerchio_sel.isdigit():
             _crea_posti_cerchio(conn, int(cerchio_sel), tavolo_id, utente_id, tema, posti)
