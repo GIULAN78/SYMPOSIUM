@@ -201,6 +201,15 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "match_visibile", "INTEGER")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS match_scartati (
+            id {pk},
+            utente_id INTEGER,
+            scartato_id INTEGER,
+            UNIQUE (utente_id, scartato_id)
+        )
+    """)
     aggiungi_colonna(conn, "utenti", "email_verificata", "INTEGER")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS verifica_email (
@@ -3181,7 +3190,7 @@ def inviti_acquista():
 ENDPOINT_FAB = {
     "home", "mappa", "locali", "dettaglio_tavolo", "miei_tavoli", "preferiti", "amici",
     "elenco_messaggi", "profilo_utente", "pagina_premium", "impostazioni", "wallet",
-    "invita_utenti", "notifiche",
+    "invita_utenti", "notifiche", "match_pagina",
 }
 
 
@@ -3586,6 +3595,131 @@ def avviso_email(risposta):
     except Exception:
         pass
     return risposta
+
+
+def _match_lista(conn, uid):
+    righe = esegui(conn, """
+        SELECT p.salvato_id AS x
+        FROM preferiti_utenti p
+        JOIN preferiti_utenti q ON q.utente_id = p.salvato_id AND q.salvato_id = p.utente_id
+        WHERE p.utente_id = ?
+    """, (uid,)).fetchall()
+    bloccati = relazioni_bloccate(conn, uid)
+    io = utente_per_id(conn, uid)
+    miei = set_interessi((io["interessi"] if io else "") or "")
+    risultato = []
+    for r in righe:
+        if r["x"] in bloccati:
+            continue
+        u = utente_per_id(conn, r["x"])
+        if not u:
+            continue
+        risultato.append({"id": r["x"], "nome": u["nome"], "foto_url": u["foto_url"],
+                          "citta": u["citta"] or "", "eta": eta_da(u["data_nascita"]),
+                          "in_comune": len(miei & set_interessi(u["interessi"] or ""))})
+    return risultato
+
+
+def _match_schede(conn, uid, solo_citta):
+    io = utente_per_id(conn, uid)
+    miei = set_interessi((io["interessi"] if io else "") or "")
+    sql = """
+        SELECT u.id, u.nome, u.interessi, u.data_nascita, u.citta, u.foto_url
+        FROM utenti u
+        WHERE u.id != ? AND COALESCE(u.sospeso, 0) = 0 AND COALESCE(u.match_visibile, 1) = 1
+          AND u.id NOT IN (SELECT salvato_id FROM preferiti_utenti WHERE utente_id = ?)
+          AND u.id NOT IN (SELECT scartato_id FROM match_scartati WHERE utente_id = ?)
+    """
+    par = [uid, uid, uid]
+    citta = ((io["citta"] if io else "") or "").strip()
+    if solo_citta and citta:
+        sql += " AND LOWER(TRIM(COALESCE(u.citta, ''))) = LOWER(TRIM(?))"
+        par.append(citta)
+    sql += " LIMIT 400"
+    righe = esegui(conn, sql, tuple(par)).fetchall()
+    bloccati = relazioni_bloccate(conn, uid)
+    risultato = []
+    for r in righe:
+        if r["id"] in bloccati:
+            continue
+        eta = eta_da(r["data_nascita"])
+        if eta is None:
+            continue
+        risultato.append({"id": r["id"], "nome": r["nome"], "foto_url": r["foto_url"], "citta": r["citta"] or "",
+                          "eta": eta, "in_comune": len(miei & set_interessi(r["interessi"] or ""))})
+    risultato.sort(key=lambda x: (-x["in_comune"], x["nome"] or ""))
+    return risultato[:24]
+
+
+@app.route("/match")
+@login_richiesto
+def match_pagina():
+    uid = session["utente_id"]
+    conn = get_db()
+    io = utente_per_id(conn, uid)
+    citta = ((io["citta"] if io else "") or "").strip()
+    tutte = request.args.get("tutte") == "1" or not citta
+    elenco = _match_lista(conn, uid)
+    schede = _match_schede(conn, uid, not tutte)
+    r = esegui(conn, "SELECT match_visibile FROM utenti WHERE id = ?", (uid,)).fetchone()
+    visibile = (r is None) or r["match_visibile"] is None or int(r["match_visibile"]) == 1
+    conn.close()
+    return render_template("match.html", elenco=elenco, schede=schede, visibile=visibile, citta=citta, tutte=tutte)
+
+
+@app.route("/match/salva/<int:utente>", methods=["POST"])
+@login_richiesto
+def match_salva(utente):
+    uid = session["utente_id"]
+    conn = get_db()
+    altro = utente_per_id(conn, utente)
+    if utente == uid or not altro or utente in relazioni_bloccate(conn, uid):
+        conn.close()
+        abort(404)
+    try:
+        esegui(conn, "INSERT INTO preferiti_utenti (utente_id, salvato_id) VALUES (?, ?)", (uid, utente))
+        conn.commit()
+    except IntegrityError:
+        conn.rollback()
+    if e_match(conn, uid, utente):
+        notifica(conn, utente, "match", session.get("utente_nome") or "Nuovo match",
+                 "🤝 Hai un match! Ora potete scrivervi.", url_for("chat_privata", altro_id=uid), uid)
+        notifica(conn, uid, "match", altro["nome"], "🤝 Hai un match! Ora potete scrivervi.",
+                 url_for("chat_privata", altro_id=utente), utente)
+        conn.commit()
+        flash("🤝 È un match! Ora potete scrivervi.")
+    else:
+        flash("Salvato. Se anche l'altra persona ti salverà, sarà un match.")
+    conn.close()
+    return redirect(url_for("match_pagina", tutte=request.form.get("tutte", "") or None))
+
+
+@app.route("/match/scorri/<int:utente>", methods=["POST"])
+@login_richiesto
+def match_scorri(utente):
+    uid = session["utente_id"]
+    if utente != uid:
+        conn = get_db()
+        try:
+            esegui(conn, "INSERT INTO match_scartati (utente_id, scartato_id) VALUES (?, ?)", (uid, utente))
+            conn.commit()
+        except IntegrityError:
+            conn.rollback()
+        conn.close()
+    return redirect(url_for("match_pagina", tutte=request.form.get("tutte", "") or None))
+
+
+@app.route("/match/visibilita", methods=["POST"])
+@login_richiesto
+def match_visibilita():
+    uid = session["utente_id"]
+    valore = 1 if request.form.get("visibile") == "1" else 0
+    conn = get_db()
+    esegui(conn, "UPDATE utenti SET match_visibile = ? WHERE id = ?", (valore, uid))
+    conn.commit()
+    conn.close()
+    flash("Ora compari nelle schede Match." if valore else "Non compari più nelle schede Match.")
+    return redirect(url_for("match_pagina"))
 
 
 @app.route("/miei-tavoli")

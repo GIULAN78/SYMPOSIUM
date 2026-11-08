@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        <h3 class="titolo-sezione">🤝 Match</h3>
+        <p class="nota">Salva le persone che ti interessano: se anche loro ti salvano, nasce un match e potete scrivervi. L'altra persona non sa che l'hai salvata finché non ricambia.</p>
+
+        <form method="POST" action="{{ url_for('match_visibilita') }}" class="form-ricerca">
+            <label class="riga-check"><input type="checkbox" name="visibile" value="1" {% if visibile %}checked{% endif %}> Compari nelle schede Match degli altri utenti</label>
+            <button type="submit" class="btn-piccolo">Salva</button>
+        </form>
+
+        <h3 class="titolo-sezione">I tuoi match</h3>
+        {% if not elenco %}<p class="vuoto">Nessun match per ora.</p>{% endif %}
+        {% for c in elenco %}
+        <div class="riga-invito">
+            {% if c.foto_url %}<img class="av-inv" src="{{ c.foto_url }}" alt="">{% else %}<span class="av-inv av-vuoto">{{ (c.nome or '?')[:1] }}</span>{% endif %}
+            <div class="info-part">
+                <strong>{{ c.nome }}{% if c.eta %}, {{ c.eta }}{% endif %}</strong>
+                <p class="interessi">{{ c.citta }}{% if c.in_comune %} · {{ c.in_comune }} interessi in comune{% endif %}</p>
+            </div>
+            <a class="btn-piccolo" href="{{ url_for('chat_privata', altro_id=c.id) }}">Scrivi</a>
+        </div>
+        {% endfor %}
+
+        <h3 class="titolo-sezione">Persone che potrebbero piacerti</h3>
+        <p class="nota">{% if tutte %}Da tutte le città. {% if citta %}<a href="{{ url_for('match_pagina') }}">Solo {{ citta }}</a>{% endif %}{% else %}Solo da {{ citta }}. <a href="{{ url_for('match_pagina', tutte=1) }}">Tutte le città</a>{% endif %}</p>
+        {% if not schede %}<p class="vuoto">Nessuna scheda al momento.</p>{% endif %}
+        {% for c in schede %}
+        <div class="riga-invito">
+            {% if c.foto_url %}<img class="av-inv" src="{{ c.foto_url }}" alt="">{% else %}<span class="av-inv av-vuoto">{{ (c.nome or '?')[:1] }}</span>{% endif %}
+            <div class="info-part">
+                <strong>{{ c.nome }}, {{ c.eta }}</strong>
+                <p class="interessi">{{ c.citta }}{% if c.in_comune %} · {{ c.in_comune }} interessi in comune{% endif %}</p>
+            </div>
+            <div class="azioni-match">
+                <form method="POST" action="{{ url_for('match_scorri', utente=c.id) }}"><input type="hidden" name="tutte" value="{{ '1' if tutte else '' }}"><button type="submit" class="btn-annulla">✕</button></form>
+                <form method="POST" action="{{ url_for('match_salva', utente=c.id) }}"><input type="hidden" name="tutte" value="{{ '1' if tutte else '' }}"><button type="submit" class="btn-iscriviti">♥ Salva</button></form>
+            </div>
+        </div>
+        {% endfor %}
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

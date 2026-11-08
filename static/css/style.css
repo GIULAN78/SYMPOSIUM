@@ -1591,3 +1591,10 @@ header h1 {
     font-weight: 700;
     cursor: pointer;
 }
+
+/* Match */
+.azioni-match {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
