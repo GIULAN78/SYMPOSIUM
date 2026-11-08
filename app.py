@@ -3887,6 +3887,34 @@ def esegui_promemoria():
             esegui(conn, "UPDATE utenti SET ultimo_riepilogo = ? WHERE id = ?", (oggi, r["id"]))
         conn.commit()
 
+    scadute = esegui(conn, """
+        SELECT r.id, r.utente_id, t.id AS tid, t.tema
+        FROM richieste r JOIN tavoli t ON t.id = r.tavolo_id
+        WHERE r.stato = 'attesa' AND r.creato_il < ?
+    """, ((datetime.now() - timedelta(hours=72)).isoformat(),)).fetchall()
+    for r in scadute:
+        esegui(conn, "DELETE FROM richieste WHERE id = ?", (r["id"],))
+        notifica(conn, r["utente_id"], "richiesta", r["tema"],
+                 "La tua richiesta per «" + r["tema"] + "» è scaduta senza risposta: puoi riprovare o cercare un altro banchetto.",
+                 url_for("dettaglio_tavolo", tavolo_id=r["tid"]))
+        esiti["scadute"] = esiti.get("scadute", 0) + 1
+    conn.commit()
+
+    vecchie = esegui(conn, """
+        SELECT t.id AS tid, t.tema, t.organizzatore_id, COUNT(*) AS n
+        FROM richieste r JOIN tavoli t ON t.id = r.tavolo_id
+        WHERE r.stato = 'attesa' AND r.creato_il < ?
+        GROUP BY t.id, t.tema, t.organizzatore_id
+    """, ((datetime.now() - timedelta(hours=24)).isoformat(),)).fetchall()
+    for r in vecchie:
+        if not r["organizzatore_id"] or _gia_inviato(conn, r["organizzatore_id"], r["tid"], "richieste"):
+            continue
+        notifica(conn, r["organizzatore_id"], "richiesta", r["tema"],
+                 "Hai richieste in attesa per «" + r["tema"] + "»: rispondi prima che scadano.",
+                 url_for("dettaglio_tavolo", tavolo_id=r["tid"]))
+        _segna_inviato(conn, r["organizzatore_id"], r["tid"], "richieste")
+    conn.commit()
+
     conn.close()
     return esiti
 
