@@ -201,6 +201,16 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "tavoli", "alx_pagati", "INTEGER DEFAULT 0")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS rimborsi_pendenti (
+            id {pk},
+            utente_id INTEGER,
+            importo INTEGER,
+            motivo TEXT,
+            creato_il TEXT
+        )
+    """)
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS ricordi_tavolo (
             id {pk},
@@ -3979,6 +3989,12 @@ def esegui_promemoria():
         _segna_inviato(conn, r["organizzatore_id"], r["tid"], "richieste")
     conn.commit()
 
+    for r in esegui(conn, "SELECT id, utente_id, importo, motivo FROM rimborsi_pendenti ORDER BY id LIMIT 20").fetchall():
+        if _rimborsa_alx(conn, r["utente_id"], r["importo"], r["motivo"], salva_pendente=False):
+            esegui(conn, "DELETE FROM rimborsi_pendenti WHERE id = ?", (r["id"],))
+            esiti["rimborsi"] = esiti.get("rimborsi", 0) + 1
+    conn.commit()
+
     conn.close()
     return esiti
 
@@ -4581,6 +4597,33 @@ def ricordo_elimina(tavolo_id, ricordo_id):
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
+def _rimborsa_alx(conn, uid, importo, motivo, salva_pendente=True):
+    u = utente_per_id(conn, uid)
+    if not u:
+        return False
+    importo = int(importo)
+    if u["id_alexandria"]:
+        st, d = api_alexandria("POST", "/symposium/rimborsa",
+                               {"id_telegram": int(u["id_alexandria"]), "importo": importo}, con_chiave=True)
+        if not (st == 200 and d and d.get("ok")):
+            if salva_pendente:
+                esegui(conn, "INSERT INTO rimborsi_pendenti (utente_id, importo, motivo, creato_il) VALUES (?, ?, ?, ?)",
+                       (uid, importo, motivo, adesso_it().isoformat()))
+            return False
+    else:
+        if esegui(conn, "SELECT 1 AS ok FROM wallet_alx WHERE utente_id = ?", (uid,)).fetchone():
+            esegui(conn, "UPDATE wallet_alx SET saldo = saldo + ? WHERE utente_id = ?", (importo, uid))
+        else:
+            esegui(conn, "INSERT INTO wallet_alx (utente_id, saldo, creato_il) VALUES (?, ?, ?)",
+                   (uid, importo, adesso_it().isoformat()))
+        esegui(conn, "INSERT INTO wallet_alx_mov (utente_id, tipo, importo, creato_il) VALUES (?, 'rimborso', ?, ?)",
+               (uid, importo, adesso_it().isoformat()))
+    esegui(conn, "INSERT INTO movimenti_alx (utente_id, tipo, importo, creato_il) VALUES (?, 'rimborso', ?, ?)",
+           (uid, -importo, adesso_it().isoformat()))
+    notifica(conn, uid, "wallet", "Wallet ALX", "Ti sono stati restituiti %d ALX: %s." % (importo, motivo), url_for("wallet"))
+    return True
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -5138,6 +5181,7 @@ def nuovo_tavolo():
             locale_id = inserisci(conn, "INSERT INTO locali (nome, indirizzo) VALUES (?, ?)", (locale_nome, ""))
 
         utente_id = session["utente_id"]
+        _alx_pagati = 0
         if esclusivo_sel and pagamento_attivo(conn) and not e_admin(conn, utente_id):
             if not e_premium(conn, utente_id):
                 conn.close()
@@ -5150,6 +5194,7 @@ def nuovo_tavolo():
                     conn.close()
                     flash(msg_spesa)
                     return render_template("nuovo_tavolo.html")
+                _alx_pagati = int(costo_dei)
         tavolo_id = inserisci(conn, """
             INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali,
                                 creato_il, citta, descrizione, min_partecipanti, eta_min, eta_max, foto_url)
@@ -5160,6 +5205,8 @@ def nuovo_tavolo():
                "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
                (tavolo_id, utente_id, datetime.now().isoformat()))
         esegui(conn, "UPDATE tavoli SET tipologia = ? WHERE id = ?", (tipologia, tavolo_id))
+        if _alx_pagati:
+            esegui(conn, "UPDATE tavoli SET alx_pagati = ? WHERE id = ?", (_alx_pagati, tavolo_id))
         _r = request.form.get("raggio_km", "")
         raggio_km = int(_r) if _r in ("10", "30", "50", "100") else None
         gusto_limite = 1 if request.form.get("gusto_limite") == "1" else 0
@@ -5365,7 +5412,7 @@ def annulla_iscrizione(tavolo_id):
 @login_richiesto
 def elimina_tavolo(tavolo_id):
     conn = get_db()
-    tavolo = esegui(conn, "SELECT organizzatore_id FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    tavolo = esegui(conn, "SELECT organizzatore_id, alx_pagati, data_ora, tema FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
 
     if not tavolo:
         conn.close()
@@ -5375,6 +5422,12 @@ def elimina_tavolo(tavolo_id):
         conn.close()
         abort(403)
 
+    _importo = int(tavolo["alx_pagati"] or 0)
+    if _importo > 0 and str(tavolo["data_ora"]) > adesso_it().replace(tzinfo=None).isoformat(timespec="minutes"):
+        if _rimborsa_alx(conn, tavolo["organizzatore_id"], _importo, "banchetto «" + (tavolo["tema"] or "") + "» eliminato"):
+            flash("Ti sono stati restituiti %d ALX." % _importo)
+        else:
+            flash("Gli ALX pagati ti verranno restituiti a breve.")
     esegui(conn, "DELETE FROM richieste WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM preferiti WHERE tavolo_id = ?", (tavolo_id,))
     esegui(conn, "DELETE FROM messaggi WHERE tavolo_id = ?", (tavolo_id,))

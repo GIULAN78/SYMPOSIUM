@@ -27,11 +27,11 @@
         </div></div>
         <h3 class="titolo-sezione">Ultimi movimenti</h3>
         {% if not movimenti %}<p class="vuoto">Nessun movimento per ora.</p>{% endif %}
-        {% set nomi = {'ricarica': 'Ricarica', 'premium': 'Premium', 'banchetto_dei': 'Banchetto degli dei', 'inviti': 'Inviti in più'} %}
+        {% set nomi = {'ricarica': 'Ricarica', 'premium': 'Premium', 'banchetto_dei': 'Banchetto degli dei', 'inviti': 'Inviti in più', 'rimborso': 'Rimborso'} %}
         {% for m in movimenti %}
         <div class="riga-invito"><div class="info-part">
             <strong>{{ nomi.get(m.tipo, m.tipo) }}</strong>
-            <p class="interessi">{{ m.creato_il[:10] }} · {% if m.tipo == 'ricarica' %}+{% else %}−{% endif %}{{ m.importo }} ALX</p>
+            <p class="interessi">{{ m.creato_il[:10] }} · {% if m.tipo in ('ricarica', 'rimborso') %}+{% else %}−{% endif %}{{ m.importo }} ALX</p>
         </div></div>
         {% endfor %}
         {% endif %}
