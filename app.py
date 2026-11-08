@@ -5158,6 +5158,18 @@ def intestazioni_sicurezza(risposta):
     return risposta
 
 
+@app.route("/.well-known/assetlinks.json")
+def assetlinks():
+    pacchetto = os.environ.get("ANDROID_PACKAGE", "").strip()
+    impronte = [x.strip() for x in os.environ.get("ANDROID_SHA256", "").split(",") if x.strip()]
+    if not pacchetto or not impronte:
+        return jsonify([])
+    return jsonify([{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {"namespace": "android_app", "package_name": pacchetto, "sha256_cert_fingerprints": impronte},
+    }])
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():

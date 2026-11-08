@@ -7,7 +7,7 @@
     <meta name="description" content="Symposium: organizza o prendi posto a un banchetto e conosci persone con i tuoi stessi interessi.">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#1a46ac">
+    <meta name="theme-color" content="#0d2a78">
     <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
 </head>
 <body>
@@ -46,6 +46,14 @@
         
     <p class="nota link-legali"><a class="link-dettaglio" href="/privacy">Privacy</a> · <a class="link-dettaglio" href="/termini">Termini</a> · <a class="link-dettaglio" href="/faq">FAQ</a></p>
     <p class="nota"><a class="link-dettaglio" href="/hai-un-locale">Hai un locale? Diventa partner</a></p>
+    <p><button type="button" class="btn-piccolo" id="installa-app" style="display:none">📲 Installa l'app</button></p>
+    <script>
+    (function () {
+        var ev = null, b = document.getElementById("installa-app");
+        window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); ev = e; b.style.display = "inline-block"; });
+        b.onclick = function () { if (ev) { ev.prompt(); } };
+    })();
+    </script>
     </main>
 <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
 </body>

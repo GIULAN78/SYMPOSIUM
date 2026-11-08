@@ -1,14 +1,71 @@
 {
+  "id": "/",
   "name": "Symposium",
   "short_name": "Symposium",
   "description": "Iscriviti a Symposium e crea il tuo banchetto",
+  "lang": "it",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#1a46ac",
-  "theme_color": "#1a46ac",
+  "orientation": "portrait",
+  "background_color": "#143b8f",
+  "theme_color": "#0d2a78",
+  "categories": [
+    "social",
+    "food",
+    "lifestyle"
+  ],
   "icons": [
-    {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-    {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Crea un banchetto",
+      "url": "/tavolo/nuovo",
+      "icons": [
+        {
+          "src": "/static/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Match",
+      "url": "/match",
+      "icons": [
+        {
+          "src": "/static/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Messaggi",
+      "url": "/messaggi",
+      "icons": [
+        {
+          "src": "/static/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }
