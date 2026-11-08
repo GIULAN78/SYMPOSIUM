@@ -69,6 +69,12 @@
             <a class="btn-nuovo" href="{{ url_for('admin_backup') }}">Scarica backup</a>
         </div></div>
 
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>🔔 Promemoria</h2>
+            <p class="nota">Invia subito i promemoria in scadenza, come farà il ciclo automatico.</p>
+            <form method="POST" action="{{ url_for('admin_promemoria_prova') }}"><button type="submit" class="btn-nuovo">Esegui i promemoria ora</button></form>
+        </div></div>
+
         <h3 class="titolo-sezione">Numeri generali</h3>
         <div class="griglia-stat">
             <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>

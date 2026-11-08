@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Promemoria - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('home') }}">← Torna ai banchetti</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        <h3 class="titolo-sezione">🔔 Promemoria</h3>
+        <form class="form-tavolo" method="POST" action="{{ url_for('promemoria_pref') }}">
+            <label class="riga-check"><input type="checkbox" name="promemoria" value="1" {% if p.promemoria %}checked{% endif %}> Promemoria dei banchetti a cui partecipo (24 ore e 2 ore prima) e dei posti riservati del cerchio</label>
+            <label class="riga-check"><input type="checkbox" name="ci_manchi" value="1" {% if p.ci_manchi %}checked{% endif %}> «Ci manchi» se non passo per 10 giorni</label>
+            <label class="riga-check"><input type="checkbox" name="zona" value="1" {% if p.zona %}checked{% endif %}> Riepilogo giornaliero dei nuovi banchetti nella mia città</label>
+            <label for="silenzio_da">Ore di silenzio: non disturbarmi dalle</label>
+            <select id="silenzio_da" name="silenzio_da">
+                {% for h in range(24) %}<option value="{{ h }}" {% if h == p.silenzio_da %}selected{% endif %}>{{ '%02d'|format(h) }}:00</option>{% endfor %}
+            </select>
+            <label for="silenzio_a">alle</label>
+            <select id="silenzio_a" name="silenzio_a">
+                {% for h in range(24) %}<option value="{{ h }}" {% if h == p.silenzio_a %}selected{% endif %}>{{ '%02d'|format(h) }}:00</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn-nuovo">Salva</button>
+        </form>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

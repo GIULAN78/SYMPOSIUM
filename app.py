@@ -201,6 +201,24 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "notif_promemoria", "INTEGER DEFAULT 1")
+    aggiungi_colonna(conn, "utenti", "notif_ci_manchi", "INTEGER DEFAULT 1")
+    aggiungi_colonna(conn, "utenti", "notif_zona", "INTEGER DEFAULT 0")
+    aggiungi_colonna(conn, "utenti", "silenzio_da", "INTEGER DEFAULT 22")
+    aggiungi_colonna(conn, "utenti", "silenzio_a", "INTEGER DEFAULT 8")
+    aggiungi_colonna(conn, "utenti", "ultimo_accesso", "TEXT")
+    aggiungi_colonna(conn, "utenti", "ultimo_ci_manchi", "TEXT")
+    aggiungi_colonna(conn, "utenti", "ultimo_riepilogo", "TEXT")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS promemoria_inviati (
+            id {pk},
+            utente_id INTEGER,
+            tavolo_id INTEGER,
+            tipo TEXT,
+            creato_il TEXT,
+            UNIQUE (utente_id, tavolo_id, tipo)
+        )
+    """)
     aggiungi_colonna(conn, "utenti", "match_visibile", "INTEGER")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS match_scartati (
@@ -3720,6 +3738,209 @@ def match_visibilita():
     conn.close()
     flash("Ora compari nelle schede Match." if valore else "Non compari più nelle schede Match.")
     return redirect(url_for("match_pagina"))
+
+
+def _in_silenzio(ora_h, da, a):
+    da = 22 if da is None else int(da)
+    a = 8 if a is None else int(a)
+    if da == a:
+        return False
+    if da > a:
+        return ora_h >= da or ora_h < a
+    return da <= ora_h < a
+
+
+def _gia_inviato(conn, uid, tavolo_id, tipo):
+    r = esegui(conn, "SELECT 1 AS ok FROM promemoria_inviati WHERE utente_id = ? AND tavolo_id = ? AND tipo = ?",
+               (uid, tavolo_id, tipo)).fetchone()
+    return r is not None
+
+
+def _segna_inviato(conn, uid, tavolo_id, tipo):
+    try:
+        esegui(conn, "INSERT INTO promemoria_inviati (utente_id, tavolo_id, tipo, creato_il) VALUES (?, ?, ?, ?)",
+               (uid, tavolo_id, tipo, adesso_it().isoformat()))
+    except IntegrityError:
+        conn.rollback()
+
+
+def esegui_promemoria():
+    esiti = {"banchetti": 0, "cerchio": 0, "ci_manchi": 0, "zona": 0}
+    ora = adesso_it()
+    ora_n = ora.replace(tzinfo=None)
+    h = ora_n.hour
+    conn = get_db()
+
+    righe = esegui(conn, """
+        SELECT t.id AS tid, t.tema, t.data_ora, u.id AS uid, u.silenzio_da, u.silenzio_a
+        FROM iscrizioni i
+        JOIN tavoli t ON t.id = i.tavolo_id
+        JOIN utenti u ON u.id = i.utente_id
+        WHERE t.data_ora > ? AND t.data_ora <= ?
+          AND COALESCE(u.sospeso, 0) = 0 AND COALESCE(u.notif_promemoria, 1) = 1
+    """, (ora_n.isoformat(timespec="minutes"),
+          (ora_n + timedelta(hours=24)).isoformat(timespec="minutes"))).fetchall()
+    for r in righe:
+        if _in_silenzio(h, r["silenzio_da"], r["silenzio_a"]):
+            continue
+        try:
+            dt = datetime.fromisoformat(r["data_ora"])
+        except (TypeError, ValueError):
+            continue
+        tipo = "2h" if (dt - ora_n) <= timedelta(hours=2) else "24h"
+        if _gia_inviato(conn, r["uid"], r["tid"], tipo):
+            continue
+        if tipo == "24h" and _gia_inviato(conn, r["uid"], r["tid"], "2h"):
+            continue
+        quando = "oggi" if dt.date() == ora_n.date() else "domani"
+        testo = ("Tra poco: «" if tipo == "2h" else "Promemoria: «") + r["tema"] + "» " + quando + " alle " + dt.strftime("%H:%M")
+        notifica(conn, r["uid"], "promemoria", r["tema"], testo,
+                 url_for("dettaglio_tavolo", tavolo_id=r["tid"]))
+        _segna_inviato(conn, r["uid"], r["tid"], tipo)
+        if tipo == "2h":
+            _segna_inviato(conn, r["uid"], r["tid"], "24h")
+        esiti["banchetti"] += 1
+    conn.commit()
+
+    righe = esegui(conn, """
+        SELECT p.tavolo_id AS tid, p.utente_id AS uid, p.scade_il, t.tema, u.silenzio_da, u.silenzio_a
+        FROM cerchio_posti p
+        JOIN tavoli t ON t.id = p.tavolo_id
+        JOIN utenti u ON u.id = p.utente_id
+        WHERE p.stato = 'attesa' AND p.scade_il > ? AND p.scade_il <= ?
+          AND COALESCE(u.notif_promemoria, 1) = 1
+          AND p.utente_id NOT IN (SELECT utente_id FROM iscrizioni WHERE tavolo_id = p.tavolo_id)
+    """, (ora.isoformat(), (ora + timedelta(hours=6)).isoformat())).fetchall()
+    for r in righe:
+        if _in_silenzio(h, r["silenzio_da"], r["silenzio_a"]) or _gia_inviato(conn, r["uid"], r["tid"], "cerchio"):
+            continue
+        try:
+            scade = datetime.fromisoformat(r["scade_il"]).strftime("%H:%M")
+        except (TypeError, ValueError):
+            scade = "a breve"
+        notifica(conn, r["uid"], "promemoria", r["tema"],
+                 "Il tuo posto riservato nel cerchio per «" + r["tema"] + "» scade alle " + scade + ": confermalo o liberalo.",
+                 url_for("dettaglio_tavolo", tavolo_id=r["tid"]))
+        _segna_inviato(conn, r["uid"], r["tid"], "cerchio")
+        esiti["cerchio"] += 1
+    conn.commit()
+
+    righe = esegui(conn, """
+        SELECT id, silenzio_da, silenzio_a FROM utenti
+        WHERE COALESCE(sospeso, 0) = 0 AND COALESCE(notif_ci_manchi, 1) = 1
+          AND ultimo_accesso IS NOT NULL AND ultimo_accesso < ?
+          AND (ultimo_ci_manchi IS NULL OR ultimo_ci_manchi < ?)
+    """, ((ora - timedelta(days=10)).isoformat(), (ora - timedelta(days=30)).isoformat())).fetchall()
+    for r in righe:
+        if _in_silenzio(h, r["silenzio_da"], r["silenzio_a"]):
+            continue
+        notifica(conn, r["id"], "ci_manchi", "Symposium",
+                 "Sono 10 giorni che non passi: guarda i nuovi banchetti vicino a te.", url_for("home"))
+        esegui(conn, "UPDATE utenti SET ultimo_ci_manchi = ? WHERE id = ?", (ora.isoformat(), r["id"]))
+        esiti["ci_manchi"] += 1
+    conn.commit()
+
+    if h >= 9:
+        oggi = ora_n.strftime("%Y-%m-%d")
+        righe = esegui(conn, """
+            SELECT id, citta, silenzio_da, silenzio_a FROM utenti
+            WHERE COALESCE(sospeso, 0) = 0 AND COALESCE(notif_zona, 0) = 1
+              AND citta IS NOT NULL AND LENGTH(TRIM(citta)) > 0 AND COALESCE(ultimo_riepilogo, '') != ?
+        """, (oggi,)).fetchall()
+        for r in righe:
+            if _in_silenzio(h, r["silenzio_da"], r["silenzio_a"]):
+                continue
+            n = int(esegui(conn, """
+                SELECT COUNT(*) AS n FROM tavoli
+                WHERE LOWER(TRIM(COALESCE(citta, ''))) = LOWER(TRIM(?)) AND creato_il > ? AND data_ora > ?
+                  AND COALESCE(esclusivo, 0) = 0 AND COALESCE(organizzatore_id, 0) != ?
+            """, (r["citta"], (datetime.now() - timedelta(hours=24)).isoformat(),
+                  ora_n.isoformat(timespec="minutes"), r["id"])).fetchone()["n"])
+            if n > 0:
+                notifica(conn, r["id"], "riepilogo", "Symposium",
+                         ("C'è %d nuovo banchetto" if n == 1 else "Ci sono %d nuovi banchetti") % n + " a " + r["citta"] + ".",
+                         url_for("home", citta=r["citta"]))
+                esiti["zona"] += 1
+            esegui(conn, "UPDATE utenti SET ultimo_riepilogo = ? WHERE id = ?", (oggi, r["id"]))
+        conn.commit()
+
+    conn.close()
+    return esiti
+
+
+@app.route("/interno/promemoria", methods=["POST"])
+def interno_promemoria():
+    import hmac as _hmac_i
+    chiave = os.environ.get("ALEXANDRIA_API_KEY", "").strip()
+    if not chiave:
+        abort(503)
+    ricevuta = request.headers.get("X-Symposium-Key", "")
+    if not ricevuta or not _hmac_i.compare_digest(ricevuta, chiave):
+        abort(403)
+    return jsonify(esegui_promemoria())
+
+
+@app.route("/admin/promemoria-prova", methods=["POST"])
+@solo_admin
+def admin_promemoria_prova():
+    e = esegui_promemoria()
+    flash("Promemoria inviati: %d banchetti, %d cerchio, %d «ci manchi», %d riepiloghi." %
+          (e["banchetti"], e["cerchio"], e["ci_manchi"], e["zona"]))
+    return redirect(url_for("admin"))
+
+
+@app.before_request
+def traccia_accesso():
+    try:
+        uid = session.get("utente_id")
+        if not uid or request.endpoint in (None, "static"):
+            return None
+        import time as _t
+        adesso = _t.time()
+        if adesso - float(session.get("acc", 0)) < 3600:
+            return None
+        session["acc"] = adesso
+        conn = get_db()
+        esegui(conn, "UPDATE utenti SET ultimo_accesso = ? WHERE id = ?", (adesso_it().isoformat(), uid))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    return None
+
+
+@app.route("/promemoria", methods=["GET", "POST"])
+@login_richiesto
+def promemoria_pref():
+    uid = session["utente_id"]
+    conn = get_db()
+    if request.method == "POST":
+        def ora_valida(campo, predefinito):
+            try:
+                v = int(request.form.get(campo, ""))
+            except ValueError:
+                return predefinito
+            return v if 0 <= v <= 23 else predefinito
+
+        esegui(conn, """
+            UPDATE utenti SET notif_promemoria = ?, notif_ci_manchi = ?, notif_zona = ?,
+                              silenzio_da = ?, silenzio_a = ? WHERE id = ?
+        """, (1 if request.form.get("promemoria") == "1" else 0,
+              1 if request.form.get("ci_manchi") == "1" else 0,
+              1 if request.form.get("zona") == "1" else 0,
+              ora_valida("silenzio_da", 22), ora_valida("silenzio_a", 8), uid))
+        conn.commit()
+        conn.close()
+        flash("Preferenze salvate.")
+        return redirect(url_for("promemoria_pref"))
+    p = esegui(conn, """
+        SELECT COALESCE(notif_promemoria, 1) AS promemoria, COALESCE(notif_ci_manchi, 1) AS ci_manchi,
+               COALESCE(notif_zona, 0) AS zona, COALESCE(silenzio_da, 22) AS silenzio_da,
+               COALESCE(silenzio_a, 8) AS silenzio_a
+        FROM utenti WHERE id = ?
+    """, (uid,)).fetchone()
+    conn.close()
+    return render_template("promemoria.html", p=p)
 
 
 @app.route("/miei-tavoli")
