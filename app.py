@@ -201,6 +201,7 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "tavoli", "spesa_indicativa", "INTEGER")
     aggiungi_colonna(conn, "utenti", "notif_promemoria", "INTEGER DEFAULT 1")
     aggiungi_colonna(conn, "utenti", "notif_ci_manchi", "INTEGER DEFAULT 1")
     aggiungi_colonna(conn, "utenti", "notif_zona", "INTEGER DEFAULT 0")
@@ -4054,6 +4055,19 @@ def gestione_cookie(risposta):
     return risposta
 
 
+def _spesa_di(tavolo_id):
+    try:
+        conn = get_db()
+        r = esegui(conn, "SELECT spesa_indicativa FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+        conn.close()
+        return int(r["spesa_indicativa"]) if r and r["spesa_indicativa"] else None
+    except Exception:
+        return None
+
+
+app.jinja_env.globals["spesa_di"] = _spesa_di
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -4561,6 +4575,12 @@ def nuovo_tavolo():
     if not _ok:
         flash("Conferma la tua email per creare un banchetto: controlla la posta.")
         return redirect(url_for("home"))
+    _c = get_db()
+    _f = esegui(_c, "SELECT foto_url FROM utenti WHERE id = ?", (session["utente_id"],)).fetchone()
+    _c.close()
+    if not _f or not (_f["foto_url"] or "").strip():
+        flash("Aggiungi una foto personale al tuo profilo per creare un banchetto.")
+        return redirect(url_for("modifica_profilo"))
     if request.method == "POST":
         tema = request.form["tema"]
         locale_nome = request.form["locale"]
@@ -4621,6 +4641,12 @@ def nuovo_tavolo():
         raggio_km = int(_r) if _r in ("10", "30", "50", "100") else None
         gusto_limite = 1 if request.form.get("gusto_limite") == "1" else 0
         esegui(conn, "UPDATE tavoli SET raggio_km = ?, gusto_limite = ? WHERE id = ?", (raggio_km, gusto_limite, tavolo_id))
+        try:
+            spesa = int(request.form.get("spesa_indicativa", "").strip())
+        except ValueError:
+            spesa = None
+        if spesa is not None and 1 <= spesa <= 500:
+            esegui(conn, "UPDATE tavoli SET spesa_indicativa = ? WHERE id = ?", (spesa, tavolo_id))
         cerchio_sel = request.form.get("cerchio_id", "")
         if cerchio_sel.isdigit():
             _crea_posti_cerchio(conn, int(cerchio_sel), tavolo_id, utente_id, tema, posti)
@@ -4668,6 +4694,11 @@ def nuovo_tavolo():
 @login_richiesto
 def iscriviti(tavolo_id):
     conn = get_db()
+    _f = esegui(conn, "SELECT foto_url FROM utenti WHERE id = ?", (session["utente_id"],)).fetchone()
+    if not _f or not (_f["foto_url"] or "").strip():
+        conn.close()
+        flash("Aggiungi una foto personale al tuo profilo per prendere posto.")
+        return redirect(url_for("modifica_profilo"))
     tavolo = esegui(conn, """
         SELECT posti_totali, eta_min, eta_max,
                (SELECT COUNT(*) FROM iscrizioni WHERE tavolo_id = ?) AS iscritti

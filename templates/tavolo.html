@@ -69,6 +69,7 @@
                 </ul>
                 {% endif %}
                 <p class="data">🗓️ {{ tavolo.data_ora|data_it }}</p>
+                {% set sp = spesa_di(tavolo.id) %}{% if sp %}<p class="data">💶 circa {{ sp }} € a persona · si paga al locale</p>{% endif %}
                 {% if tavolo.eta_min is not none and tavolo.eta_max is not none %}
                 <p>👥 Età ammessa: {{ tavolo.eta_min }}-{{ tavolo.eta_max }}</p>
                 {% endif %}

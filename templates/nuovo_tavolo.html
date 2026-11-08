@@ -67,6 +67,8 @@
 
             <label for="obiettivo">Obiettivo (opzionale)</label>
             <input type="text" id="obiettivo" name="obiettivo" placeholder="Es. Niente smartphone al banchetto">
+            <label for="spesa_indicativa">Spesa indicativa a persona in € (facoltativa)</label>
+            <input type="number" id="spesa_indicativa" name="spesa_indicativa" min="1" max="500" placeholder="Es. 25">
 
             {% if sono_premium %}
             <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Banchetto degli dei (riservato ai Premium) {% if pag_attivo %}· costa {{ prezzo_dei }} ALX{% else %}· gratis per ora{% endif %}</label>
