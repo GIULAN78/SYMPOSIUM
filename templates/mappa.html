@@ -49,10 +49,15 @@
         </form>
 
         <p id="mappa-stato" class="nota-mappa">Caricamento della mappa...</p>
+        <p><button type="button" class="btn-nuovo" id="mappa-area">🔍 Cerca in quest'area</button> <button type="button" class="btn-piccolo" id="mappa-pos">📍 Dove sono</button></p>
         <div id="mappa" class="mappa-box"></div>
+        <div id="mappa-elenco"></div>
     </main>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
 (function () {
     var mappa = L.map("mappa").setView([42.5, 12.5], 6);
@@ -68,27 +73,83 @@
     }
 
     var stato = document.getElementById("mappa-stato");
+    var elenco = document.getElementById("mappa-elenco");
     var query = window.location.search.replace(/^\?/, "");
+    var gruppo = L.markerClusterGroup();
+    mappa.addLayer(gruppo);
+    var dati = [];
+    var io = null;
+
+    function posCookie() {
+        var m = document.cookie.match(/(?:^|; )pos=([^;]*)/);
+        if (!m) { return null; }
+        var p = decodeURIComponent(m[1]).split("_");
+        var a = parseFloat(p[0]), b = parseFloat(p[1]);
+        return (isNaN(a) || isNaN(b)) ? null : [a, b];
+    }
+
+    function segnaPos(p) {
+        if (io) { mappa.removeLayer(io); }
+        io = L.circleMarker(p, { radius: 8, color: "#c8971f", fillColor: "#0d2a78", fillOpacity: 0.9 })
+            .addTo(mappa).bindPopup("Sei qui");
+    }
+
+    function disegna(lista) {
+        gruppo.clearLayers();
+        lista.forEach(function (t) {
+            var html = "<strong>" + esc(t.tema) + "</strong>" + (t.confermato ? " ✅" : "") +
+                "<br>📍 " + esc(t.locale) + (t.citta ? ", " + esc(t.citta) : "") +
+                "<br>🗓️ " + esc(t.data) +
+                "<br>" + esc(t.iscritti) + "/" + esc(t.posti) + " posti" +
+                '<br><a href="' + esc(t.url) + '">Vedi dettagli →</a>';
+            gruppo.addLayer(L.marker([t.lat, t.lng]).bindPopup(html));
+        });
+    }
+
+    function mostraElenco(lista) {
+        elenco.innerHTML = "";
+        lista.forEach(function (t) {
+            var p = document.createElement("p");
+            var a = document.createElement("a");
+            a.href = t.url;
+            a.textContent = t.tema;
+            p.appendChild(a);
+            p.appendChild(document.createTextNode(" · " + (t.locale || "") + " · " + t.data));
+            elenco.appendChild(p);
+        });
+    }
+
+    document.getElementById("mappa-area").onclick = function () {
+        var b = mappa.getBounds();
+        var l = dati.filter(function (t) { return b.contains([t.lat, t.lng]); });
+        stato.textContent = l.length + (l.length === 1 ? " banchetto in quest'area" : " banchetti in quest'area");
+        mostraElenco(l);
+    };
+
+    document.getElementById("mappa-pos").onclick = function () {
+        if (!navigator.geolocation) { stato.textContent = "Il tuo dispositivo non supporta la posizione."; return; }
+        navigator.geolocation.getCurrentPosition(function (p) {
+            var q = [p.coords.latitude, p.coords.longitude];
+            segnaPos(q);
+            mappa.setView(q, 12);
+        }, function () { stato.textContent = "Posizione non disponibile: controlla i permessi del browser."; });
+    };
 
     fetch("/?json=1" + (query ? "&" + query : ""), { credentials: "same-origin" })
         .then(function (r) { return r.json(); })
-        .then(function (dati) {
+        .then(function (d) {
+            dati = d;
+            var pos = posCookie();
+            if (pos) { segnaPos(pos); mappa.setView(pos, 11); }
             if (!dati.length) {
                 stato.textContent = "Nessun banchetto con una posizione da mostrare.";
                 return;
             }
             stato.textContent = dati.length + (dati.length === 1 ? " banchetto sulla mappa" : " banchetti sulla mappa");
-            var punti = [];
-            dati.forEach(function (t) {
-                var html = "<strong>" + esc(t.tema) + "</strong>" + (t.confermato ? " ✅" : "") +
-                    "<br>📍 " + esc(t.locale) + (t.citta ? ", " + esc(t.citta) : "") +
-                    "<br>🗓️ " + esc(t.data) +
-                    "<br>" + esc(t.iscritti) + "/" + esc(t.posti) + " posti" +
-                    '<br><a href="' + esc(t.url) + '">Vedi dettagli →</a>';
-                L.marker([t.lat, t.lng]).addTo(mappa).bindPopup(html);
-                punti.push([t.lat, t.lng]);
-            });
-            mappa.fitBounds(punti, { padding: [30, 30], maxZoom: 14 });
+            disegna(dati);
+            if (!pos) {
+                mappa.fitBounds(dati.map(function (t) { return [t.lat, t.lng]; }), { padding: [30, 30], maxZoom: 14 });
+            }
         })
         .catch(function () { stato.textContent = "Impossibile caricare la mappa, riprova."; });
 })();
