@@ -1418,12 +1418,12 @@ header::after {
 
 /* Tema metallico */
 body {
-    background: linear-gradient(160deg, #4a7fe8 0%, #2a63d8 32%, #1f4fb8 68%, #2f6ee0 100%) fixed;
+    background: #143b8f;
 }
 
 header {
-    background: linear-gradient(180deg, #3a6fdc 0%, #1a46ac 48%, #102f86 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 3px 8px rgba(0, 0, 0, 0.35);
+    background: #0d2a78;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
     border-bottom: 3px solid #c8971f;
 }
 
@@ -1444,17 +1444,17 @@ header h1 {
 }
 
 .btn-iscriviti, .btn-piccolo, .btn-annulla, .btn-indietro {
-    background: linear-gradient(180deg, #3a6fdc 0%, #12328a 100%);
+    background: #0d2a78;
     color: #ffe27a;
     border: 2px solid #c8971f;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
 }
 
 .card-tavolo, .stat-card {
-    background: linear-gradient(180deg, #ffffff 0%, #fffdf6 55%, #f3ead0 100%);
+    background: #fffdf6;
     border: 2px solid #c8971f;
     border-left: 6px solid #e0b030;
-    box-shadow: inset 0 1px 0 #ffffff, 0 3px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
 .riquadro-tipologia {
@@ -1463,13 +1463,11 @@ header h1 {
 }
 
 .badge-conf {
-    background: linear-gradient(180deg, #34c07f, #188a55);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    background: #1f9d62;
 }
 
 .badge-ass {
-    background: linear-gradient(180deg, #e8506f, #b8264a);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    background: #c2335a;
 }
 
 .tipologia-etichetta, .chip-int input:checked + span {
@@ -1479,8 +1477,7 @@ header h1 {
 }
 
 .campanella-n {
-    background: linear-gradient(180deg, #ffb06a, #e8742c);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    background: #e8742c;
 }
 /* Fine tema metallico */
 
