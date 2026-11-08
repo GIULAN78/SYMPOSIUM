@@ -4068,6 +4068,83 @@ def _spesa_di(tavolo_id):
 app.jinja_env.globals["spesa_di"] = _spesa_di
 
 
+DOMANDE_SOCRATE = [
+    "Qual è il piatto che ti riporta subito all'infanzia?",
+    "Se potessi cenare con un personaggio della mitologia greca, chi sceglieresti e perché?",
+    "Qual è il viaggio che ti ha cambiato di più?",
+    "Quale libro regaleresti a tutti i presenti?",
+    "Qual è la cosa più bizzarra che hai mai mangiato?",
+    "Se aprissi un locale, che cosa serviresti?",
+    "Qual è un talento nascosto che nessuno immagina?",
+    "Qual è la canzone che ti mette sempre di buon umore?",
+    "Cosa faresti con una giornata libera in più alla settimana?",
+    "Qual è il miglior consiglio che hai ricevuto?",
+    "Qual è il posto del cuore dove torneresti sempre?",
+    "Quale epoca storica ti piacerebbe visitare per un giorno?",
+    "Qual è la tua passione che occupa più tempo?",
+    "Cosa ti fa ridere fino alle lacrime?",
+    "Se la tua vita fosse un film, di che genere sarebbe?",
+    "Qual è il piatto che cucini per fare bella figura?",
+    "Che cosa ti piacerebbe imparare quest'anno?",
+    "Qual è il ricordo più bello legato a una tavola imbandita?",
+    "Mare, montagna o città? Racconta perché.",
+    "Che mestiere volevi fare da bambino?",
+    "Qual è l'oggetto a cui sei più affezionato?",
+    "Di quale invenzione non potresti proprio fare a meno?",
+    "Qual è un'abitudine strana che hai?",
+    "Cosa non manca mai nel tuo frigorifero?",
+    "Se potessi parlare al volo una lingua in più, quale sceglieresti?",
+    "Qual è stata la serata più memorabile degli ultimi anni?",
+    "Qual è l'ultima cosa che ti ha davvero sorpreso?",
+    "Quale dono vorresti ricevere dagli dei?",
+    "Qual è il tuo rituale preferito del fine settimana?",
+    "Quale film hai visto più di tre volte?",
+]
+
+app.jinja_env.globals["domande_socrate"] = lambda: DOMANDE_SOCRATE
+
+
+@app.route("/tavolo/<int:tavolo_id>/calendario.ics")
+def calendario_tavolo(tavolo_id):
+    from flask import Response as _Resp
+    conn = get_db()
+    t = esegui(conn, """
+        SELECT t.tema, t.data_ora, t.citta, l.nome AS locale_nome
+        FROM tavoli t LEFT JOIN locali l ON t.locale_id = l.id WHERE t.id = ?
+    """, (tavolo_id,)).fetchone()
+    conn.close()
+    if not t:
+        abort(404)
+    try:
+        inizio = datetime.fromisoformat(str(t["data_ora"])).replace(tzinfo=None)
+    except (TypeError, ValueError):
+        abort(404)
+    fine = inizio + timedelta(hours=2)
+
+    def esc(x):
+        return str(x or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+    luogo = ", ".join([p for p in (t["locale_nome"], t["citta"]) if p])
+    link = request.url_root.rstrip("/") + url_for("dettaglio_tavolo", tavolo_id=tavolo_id)
+    righe = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Symposium//IT",
+        "BEGIN:VEVENT",
+        "UID:banchetto-%d@symposium" % tavolo_id,
+        "DTSTAMP:" + datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"),
+        "DTSTART:" + inizio.strftime("%Y%m%dT%H%M%S"),
+        "DTEND:" + fine.strftime("%Y%m%dT%H%M%S"),
+        "SUMMARY:" + esc("Banchetto: " + (t["tema"] or "Symposium")),
+        "LOCATION:" + esc(luogo),
+        "DESCRIPTION:" + esc("Banchetto su Symposium. Dettagli: " + link),
+        "END:VEVENT",
+        "END:VCALENDAR",
+    ]
+    return _Resp("\r\n".join(righe) + "\r\n", mimetype="text/calendar",
+                 headers={"Content-Disposition": 'attachment; filename="banchetto.ics"'})
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():

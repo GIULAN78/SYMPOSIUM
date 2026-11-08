@@ -69,6 +69,7 @@
                 </ul>
                 {% endif %}
                 <p class="data">🗓️ {{ tavolo.data_ora|data_it }}</p>
+                <p class="data"><a class="link-dettaglio" href="{{ url_for('calendario_tavolo', tavolo_id=tavolo.id) }}">📅 Aggiungi al calendario</a></p>
                 {% set sp = spesa_di(tavolo.id) %}{% if sp %}<p class="data">💶 circa {{ sp }} € a persona · si paga al locale</p>{% endif %}
                 {% if tavolo.eta_min is not none and tavolo.eta_max is not none %}
                 <p>👥 Età ammessa: {{ tavolo.eta_min }}-{{ tavolo.eta_max }}</p>
@@ -159,6 +160,22 @@
         </div>
         {% endif %}
 
+        <div class="box-cerchio" id="socrate">
+            <p>🏛️ <strong>Le domande di Socrate</strong></p>
+            <p id="socrate-testo">Una domanda per rompere il ghiaccio a tavola.</p>
+            <button type="button" class="btn-piccolo" id="socrate-btn">Estrai una domanda</button>
+        </div>
+        <script>
+        (function () {
+            var d = {{ domande_socrate()|tojson }};
+            var b = document.getElementById("socrate-btn");
+            var t = document.getElementById("socrate-testo");
+            b.onclick = function () {
+                t.textContent = d[Math.floor(Math.random() * d.length)];
+                b.textContent = "Un'altra domanda";
+            };
+        })();
+        </script>
         <h3 class="titolo-sezione">Partecipanti ({{ partecipanti|length }}/{{ tavolo.posti_totali }})</h3>
         <div class="lista-partecipanti">
             {% for p in partecipanti %}
