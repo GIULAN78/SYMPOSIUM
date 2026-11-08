@@ -75,6 +75,16 @@
             <form method="POST" action="{{ url_for('admin_promemoria_prova') }}"><button type="submit" class="btn-nuovo">Esegui i promemoria ora</button></form>
         </div></div>
 
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>💰 Assegna ALX</h2>
+            <p class="nota">Accredita ALX nel Wallet ALX di un utente, per email.</p>
+            <form method="POST" action="{{ url_for('admin_alx') }}">
+                <input type="email" name="email" placeholder="Email dell'utente" required>
+                <input type="number" name="importo" min="1" max="100000" placeholder="ALX da accreditare" required>
+                <button type="submit" class="btn-nuovo">Accredita</button>
+            </form>
+        </div></div>
+
         <h3 class="titolo-sezione">Numeri generali</h3>
         <div class="griglia-stat">
             <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>

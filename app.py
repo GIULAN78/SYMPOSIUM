@@ -202,6 +202,23 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
     esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS wallet_alx (
+            id {pk},
+            utente_id INTEGER UNIQUE,
+            saldo INTEGER DEFAULT 0,
+            creato_il TEXT
+        )
+    """)
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS wallet_alx_mov (
+            id {pk},
+            utente_id INTEGER,
+            tipo TEXT,
+            importo INTEGER,
+            creato_il TEXT
+        )
+    """)
+    esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS push_iscrizioni (
             id {pk},
             utente_id INTEGER,
@@ -2358,6 +2375,16 @@ def wallet():
     u = utente_per_id(conn, session["utente_id"])
     conn.close()
     id_al = u["id_alexandria"]
+    if not id_al and request.args.get("collega") != "1":
+        c2 = get_db()
+        r2 = esegui(c2, "SELECT saldo FROM wallet_alx WHERE utente_id = ?", (session["utente_id"],)).fetchone()
+        mov = []
+        if r2:
+            mov = esegui(c2, "SELECT tipo, importo, creato_il FROM wallet_alx_mov WHERE utente_id = ? ORDER BY creato_il DESC LIMIT 10",
+                         (session["utente_id"],)).fetchall()
+        c2.close()
+        return render_template("wallet_alx.html", aperto=r2 is not None,
+                               saldo=int(r2["saldo"] or 0) if r2 else 0, movimenti=mov)
     configurato = bool(os.environ.get("ALEXANDRIA_API_URL", "").strip() and os.environ.get("ALEXANDRIA_API_KEY", "").strip())
     saldo, illimitato, errore = None, False, None
     movimenti, pacchetti = [], {}
@@ -2436,7 +2463,7 @@ def wallet_acquista():
     u = utente_per_id(conn, session["utente_id"])
     conn.close()
     if not u["id_alexandria"]:
-        flash("Collega prima il tuo account Alexandria.")
+        flash("L'acquisto di ALX direttamente in Symposium non è ancora disponibile: puoi collegare un account Alexandria per acquistarli.")
         return redirect(url_for("wallet"))
     pacchetto = request.form.get("pacchetto", "")
     st, d = api_alexandria("POST", "/symposium/acquista-alx",
@@ -2516,8 +2543,20 @@ def spendi_alx(conn, uid, importo, tipo="altro"):
     if e_admin(conn, uid):
         return True, ""
     u = utente_per_id(conn, uid)
-    if not u or not u["id_alexandria"]:
-        return False, "Per pagare in ALX collega prima il tuo account Alexandria dal Wallet ALX."
+    if not u:
+        return False, "Utente non trovato."
+    if not u["id_alexandria"]:
+        r = esegui(conn, "SELECT saldo FROM wallet_alx WHERE utente_id = ?", (uid,)).fetchone()
+        if not r:
+            return False, "Apri il tuo Wallet ALX dal menu per pagare in ALX."
+        if int(r["saldo"] or 0) < int(importo):
+            return False, "Saldo ALX insufficiente nel tuo Wallet ALX."
+        esegui(conn, "UPDATE wallet_alx SET saldo = saldo - ? WHERE utente_id = ?", (int(importo), uid))
+        esegui(conn, "INSERT INTO wallet_alx_mov (utente_id, tipo, importo, creato_il) VALUES (?, ?, ?, ?)",
+               (uid, tipo, int(importo), adesso_it().isoformat()))
+        esegui(conn, "INSERT INTO movimenti_alx (utente_id, tipo, importo, creato_il) VALUES (?, ?, ?, ?)",
+               (uid, tipo, int(importo), adesso_it().isoformat()))
+        return True, ""
     st, d = api_alexandria("POST", "/symposium/spendi",
                            {"id_telegram": int(u["id_alexandria"]), "importo": int(importo)}, con_chiave=True)
     if st == 200 and d and d.get("ok"):
@@ -4319,6 +4358,50 @@ def benvenuto():
     conn.close()
     mostra = utenti >= 20 or programma >= 5
     return render_template("benvenuto.html", utenti=utenti, programma=programma, citta=citta, mostra=mostra)
+
+
+@app.route("/wallet/apri", methods=["POST"])
+@login_richiesto
+def wallet_apri():
+    uid = session["utente_id"]
+    conn = get_db()
+    if not esegui(conn, "SELECT 1 AS ok FROM wallet_alx WHERE utente_id = ?", (uid,)).fetchone():
+        try:
+            esegui(conn, "INSERT INTO wallet_alx (utente_id, saldo, creato_il) VALUES (?, 0, ?)", (uid, adesso_it().isoformat()))
+            conn.commit()
+        except IntegrityError:
+            conn.rollback()
+    conn.close()
+    flash("Il tuo Wallet ALX è aperto.")
+    return redirect(url_for("wallet"))
+
+
+@app.route("/admin/alx", methods=["POST"])
+@solo_admin
+def admin_alx():
+    email = request.form.get("email", "").strip().lower()
+    try:
+        importo = int(request.form.get("importo", ""))
+    except ValueError:
+        importo = 0
+    conn = get_db()
+    u = esegui(conn, "SELECT id, nome FROM utenti WHERE LOWER(email) = ?", (email,)).fetchone()
+    if not u or importo < 1 or importo > 100000:
+        conn.close()
+        flash("Utente non trovato o importo non valido (da 1 a 100000).")
+        return redirect(url_for("admin"))
+    if esegui(conn, "SELECT 1 AS ok FROM wallet_alx WHERE utente_id = ?", (u["id"],)).fetchone():
+        esegui(conn, "UPDATE wallet_alx SET saldo = saldo + ? WHERE utente_id = ?", (importo, u["id"]))
+    else:
+        esegui(conn, "INSERT INTO wallet_alx (utente_id, saldo, creato_il) VALUES (?, ?, ?)",
+               (u["id"], importo, adesso_it().isoformat()))
+    esegui(conn, "INSERT INTO wallet_alx_mov (utente_id, tipo, importo, creato_il) VALUES (?, 'ricarica', ?, ?)",
+           (u["id"], importo, adesso_it().isoformat()))
+    notifica(conn, u["id"], "wallet", "Wallet ALX", "Hai ricevuto %d ALX nel tuo Wallet ALX." % importo, url_for("wallet"))
+    conn.commit()
+    conn.close()
+    flash("Accreditati %d ALX a %s." % (importo, u["nome"]))
+    return redirect(url_for("admin"))
 
 
 @app.route("/miei-tavoli")
