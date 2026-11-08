@@ -3205,6 +3205,8 @@ def inviti_acquista():
     return redirect(request.referrer or url_for("home"))
 
 
+ESCLUSI_FAB = {"nuovo_tavolo", "accedi", "registrati", "esci", "static"}
+
 ENDPOINT_FAB = {
     "home", "mappa", "locali", "dettaglio_tavolo", "miei_tavoli", "preferiti", "amici",
     "elenco_messaggi", "profilo_utente", "pagina_premium", "impostazioni", "wallet",
@@ -3219,7 +3221,7 @@ def pulsante_crea(risposta):
             "utente_id" not in session
             or risposta.status_code != 200
             or risposta.mimetype != "text/html"
-            or request.endpoint not in ENDPOINT_FAB
+            or request.endpoint in ESCLUSI_FAB
         ):
             return risposta
         testo = risposta.get_data(as_text=True)
