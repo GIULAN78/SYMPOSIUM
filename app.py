@@ -4806,6 +4806,16 @@ def nuovo_tavolo():
     if not _f or not (_f["foto_url"] or "").strip():
         flash("Aggiungi una foto personale al tuo profilo per creare un banchetto.")
         return redirect(url_for("modifica_profilo"))
+    from datetime import timedelta as _td
+    _c = get_db()
+    _n_assenze = int(esegui(_c, "SELECT COUNT(*) AS n FROM assenze WHERE utente_id = ? AND creato_il > ?",
+                            (session["utente_id"], (adesso_it().replace(tzinfo=None) - _td(days=60)).isoformat())).fetchone()["n"])
+    _c.close()
+    if _n_assenze >= 3:
+        flash("Hai saltato troppi banchetti negli ultimi 60 giorni: per ora non puoi crearne di nuovi. Il blocco si scioglie da solo.")
+        return redirect(url_for("home"))
+    if _n_assenze == 2 and request.method == "GET":
+        flash("Attenzione: hai già saltato 2 banchetti negli ultimi 60 giorni. Al terzo non potrai crearne di nuovi.")
     if request.method == "POST":
         tema = request.form["tema"]
         locale_nome = request.form["locale"]
