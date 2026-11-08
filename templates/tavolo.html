@@ -84,6 +84,7 @@
                 })();
                 </script>
                 {% set sp = spesa_di(tavolo.id) %}{% if sp %}<p class="data">💶 circa {{ sp }} € a persona · si paga al locale</p>{% endif %}
+                {% set pt = partner_di(tavolo.id) %}{% if pt %}<p class="data">🤝 Locale partner Symposium{% if pt.sconto %} · {{ pt.sconto }}{% endif %}</p>{% endif %}
                 {% set dc = dopo_di(tavolo.id) %}{% if dc %}<p class="data">🥂 Dopo il banchetto: {{ dc }}</p>{% endif %}
                 {% if tavolo.eta_min is not none and tavolo.eta_max is not none %}
                 <p>👥 Età ammessa: {{ tavolo.eta_min }}-{{ tavolo.eta_max }}</p>

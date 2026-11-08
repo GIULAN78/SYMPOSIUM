@@ -85,6 +85,32 @@
             </form>
         </div></div>
 
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>🍽️ Locali partner</h2>
+            <p class="nota">Il locale compare con il bollino 🤝 nei banchetti organizzati da lì. Scrivi il nome come appare nei banchetti.</p>
+            <form method="POST" action="{{ url_for('admin_partner') }}">
+                <input type="text" name="nome" placeholder="Nome del locale" required>
+                <input type="text" name="sconto" maxlength="80" placeholder="Es. -10% per i partecipanti di Symposium">
+                <button type="submit" name="azione" value="aggiungi" class="btn-nuovo">Segna come partner</button>
+            </form>
+            {% for p in extra.partner_elenco %}
+            <form method="POST" action="{{ url_for('admin_partner') }}">
+                <p>🤝 {{ p.nome }}{% if p.sconto %} · {{ p.sconto }}{% endif %}
+                <input type="hidden" name="nome" value="{{ p.nome }}">
+                <button type="submit" name="azione" value="togli" class="btn-annulla">Togli</button></p>
+            </form>
+            {% endfor %}
+        </div></div>
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>📨 Richieste dei locali ({{ extra.richieste_locali|length }})</h2>
+            {% if not extra.richieste_locali %}<p class="nota">Nessuna richiesta per ora.</p>{% endif %}
+            {% for r in extra.richieste_locali %}
+            <p><strong>{{ r.nome_locale }}</strong>{% if r.citta %}, {{ r.citta }}{% endif %}<br>
+            {{ r.referente }} · {{ r.email }}{% if r.telefono %} · {{ r.telefono }}{% endif %}<br>
+            <span class="nota">{{ r.creato_il[:10] }}{% if r.messaggio %} · {{ r.messaggio }}{% endif %}</span></p>
+            {% endfor %}
+        </div></div>
+
         <h3 class="titolo-sezione">Numeri generali</h3>
         <div class="griglia-stat">
             <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>

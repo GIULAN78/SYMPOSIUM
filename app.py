@@ -202,6 +202,20 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "locali", "partner", "INTEGER DEFAULT 0")
+    aggiungi_colonna(conn, "locali", "sconto", "TEXT")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS richieste_locali (
+            id {pk},
+            nome_locale TEXT,
+            citta TEXT,
+            referente TEXT,
+            email TEXT,
+            telefono TEXT,
+            messaggio TEXT,
+            creato_il TEXT
+        )
+    """)
     aggiungi_colonna(conn, "utenti", "instagram", "TEXT")
     aggiungi_colonna(conn, "utenti", "archetipo", "TEXT")
     aggiungi_colonna(conn, "utenti", "mostra_segno", "INTEGER")
@@ -2192,6 +2206,7 @@ def dati_extra():
         "alx_dei": alx_somma(conn, "tipo = ?", ("banchetto_dei",)),
         "alx_paganti": paganti,
         **_alx_wallet_stats(conn),
+        **_locali_admin(conn),
         "premium_attivi": conta(conn, "utenti", "premium_fino > ?", (adesso_it().isoformat(),)),
     }
     conn.close()
@@ -4957,6 +4972,103 @@ def _alx_wallet_stats(conn):
         "wallet_aperti": uno("SELECT COUNT(*) AS n FROM wallet_alx"),
         "wallet_con_saldo": uno("SELECT COUNT(*) AS n FROM wallet_alx WHERE saldo > 0"),
     }
+
+
+def partner_di(tavolo_id):
+    try:
+        conn = get_db()
+        r = esegui(conn, "SELECT l.partner, l.sconto FROM tavoli t JOIN locali l ON l.id = t.locale_id WHERE t.id = ?",
+                   (tavolo_id,)).fetchone()
+        conn.close()
+        if r and r["partner"]:
+            return {"sconto": (r["sconto"] or "").strip()}
+    except Exception:
+        pass
+    return None
+
+
+app.jinja_env.globals["partner_di"] = partner_di
+
+
+def _locali_admin(conn):
+    try:
+        partner = esegui(conn, "SELECT nome, sconto FROM locali WHERE partner = 1 ORDER BY nome").fetchall()
+        ric = esegui(conn, "SELECT nome_locale, citta, referente, email, telefono, messaggio, creato_il "
+                           "FROM richieste_locali ORDER BY id DESC LIMIT 20").fetchall()
+        return {"partner_elenco": [dict(r) for r in partner], "richieste_locali": [dict(r) for r in ric]}
+    except Exception:
+        return {"partner_elenco": [], "richieste_locali": []}
+
+
+def _avvisa_admin_locale(dati):
+    try:
+        import html as _h
+        dest = os.environ.get("ADMIN_EMAIL", "").strip()
+        if not dest:
+            return
+        corpo = "".join("<p><strong>%s</strong>: %s</p>" % (k, _h.escape(v or "")) for k, v in dati)
+        api_alexandria("POST", "/symposium/invia-email",
+                       {"destinatario": dest, "oggetto": "Symposium: nuova richiesta da un locale", "html": corpo},
+                       con_chiave=True)
+    except Exception:
+        pass
+
+
+@app.route("/hai-un-locale", methods=["GET", "POST"])
+def locale_contatto():
+    if request.method == "POST":
+        if request.form.get("sito_web"):
+            return redirect(url_for("locale_contatto"))
+        nome = request.form.get("nome_locale", "").strip()[:120]
+        citta = request.form.get("citta", "").strip()[:80]
+        referente = request.form.get("referente", "").strip()[:80]
+        email = request.form.get("email", "").strip()[:120]
+        telefono = request.form.get("telefono", "").strip()[:40]
+        messaggio = request.form.get("messaggio", "").strip()[:800]
+        if not nome or "@" not in email or request.form.get("consenso") != "1":
+            flash("Compila almeno il nome del locale e un'email valida, e accetta il trattamento dei dati.")
+            return redirect(url_for("locale_contatto"))
+        conn = get_db()
+        recenti = int(esegui(conn, "SELECT COUNT(*) AS n FROM richieste_locali WHERE creato_il > ?",
+                             ((adesso_it() - timedelta(hours=1)).isoformat(),)).fetchone()["n"])
+        if recenti >= 20:
+            conn.close()
+            flash("Troppe richieste in questo momento: riprova tra un'ora.")
+            return redirect(url_for("locale_contatto"))
+        esegui(conn, "INSERT INTO richieste_locali (nome_locale, citta, referente, email, telefono, messaggio, creato_il) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?)", (nome, citta, referente, email, telefono, messaggio, adesso_it().isoformat()))
+        conn.commit()
+        conn.close()
+        _avvisa_admin_locale([("Locale", nome), ("Città", citta), ("Referente", referente), ("Email", email),
+                              ("Telefono", telefono), ("Messaggio", messaggio)])
+        flash("Grazie! Ti ricontatteremo presto.")
+        return redirect(url_for("locale_contatto"))
+    return render_template("locale_contatto.html")
+
+
+@app.route("/admin/partner", methods=["POST"])
+@solo_admin
+def admin_partner():
+    nome = request.form.get("nome", "").strip()[:120]
+    sconto = request.form.get("sconto", "").strip()[:80]
+    azione = request.form.get("azione", "")
+    if not nome:
+        flash("Scrivi il nome del locale.")
+        return redirect(url_for("admin"))
+    conn = get_db()
+    esiste = int(esegui(conn, "SELECT COUNT(*) AS n FROM locali WHERE LOWER(nome) = LOWER(?)", (nome,)).fetchone()["n"])
+    if azione == "togli":
+        esegui(conn, "UPDATE locali SET partner = 0, sconto = NULL WHERE LOWER(nome) = LOWER(?)", (nome,))
+        flash("Locale tolto dai partner.")
+    else:
+        if esiste:
+            esegui(conn, "UPDATE locali SET partner = 1, sconto = ? WHERE LOWER(nome) = LOWER(?)", (sconto, nome))
+        else:
+            esegui(conn, "INSERT INTO locali (nome, indirizzo, partner, sconto) VALUES (?, '', 1, ?)", (nome, sconto))
+        flash("Locale segnato come partner.")
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin"))
 
 
 @app.route("/miei-tavoli")

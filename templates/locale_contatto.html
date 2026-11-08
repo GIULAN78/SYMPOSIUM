@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hai un locale? - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1><a class="logo-link" href="{{ url_for('home') }}">Symposium</a></h1>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        <h3 class="titolo-sezione">🍽️ Hai un locale?</h3>
+        <p class="nota">Symposium riunisce persone che vogliono cenare insieme. Se hai un ristorante, un pub o una vineria, puoi diventare locale partner: i banchetti organizzati da te compaiono con il bollino 🤝 e con lo sconto che vuoi offrire ai partecipanti. Scrivici: ti ricontatteremo.</p>
+        <form class="form-tavolo" method="POST" action="{{ url_for('locale_contatto') }}">
+            <label for="nome_locale">Nome del locale</label>
+            <input type="text" id="nome_locale" name="nome_locale" maxlength="120" required>
+            <label for="citta">Città</label>
+            <input type="text" id="citta" name="citta" maxlength="80">
+            <label for="referente">Il tuo nome</label>
+            <input type="text" id="referente" name="referente" maxlength="80">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" maxlength="120" required>
+            <label for="telefono">Telefono (facoltativo)</label>
+            <input type="text" id="telefono" name="telefono" maxlength="40">
+            <label for="messaggio">Messaggio (facoltativo)</label>
+            <textarea id="messaggio" name="messaggio" rows="4" maxlength="800"></textarea>
+            <input type="text" name="sito_web" value="" autocomplete="off" tabindex="-1" style="position:absolute;left:-9999px" aria-hidden="true">
+            <label class="riga-check"><input type="checkbox" name="consenso" value="1" required> Acconsento al trattamento dei miei dati per essere ricontattato, come descritto nella <a href="/privacy">Privacy</a>.</label>
+            <button type="submit" class="btn-nuovo">Invia la richiesta</button>
+        </form>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>
