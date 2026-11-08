@@ -201,6 +201,17 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "inviti_extra", "INTEGER DEFAULT 0")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS inviti (
+            id {pk},
+            tavolo_id INTEGER,
+            da_id INTEGER,
+            a_id INTEGER,
+            creato_il TEXT,
+            UNIQUE (tavolo_id, a_id)
+        )
+    """)
     esegui(conn, """
         CREATE TABLE IF NOT EXISTS google_uso (
             giorno TEXT PRIMARY KEY,
@@ -2899,6 +2910,205 @@ def _foto_locale(tavolo_id):
 
 
 app.jinja_env.globals["foto_locale"] = _foto_locale
+
+
+def _quota_inviti(conn, uid):
+    if e_admin(conn, uid):
+        return {"illimitata": True, "gratis": 999, "extra": 0, "totale": 999, "limite": 999}
+    limite = prezzo_alx(conn, "inviti_settimana", 30)
+    da = (adesso_it() - timedelta(days=7)).isoformat()
+    usati = int(esegui(conn, "SELECT COUNT(*) AS n FROM inviti WHERE da_id = ? AND creato_il > ?",
+                       (uid, da)).fetchone()["n"])
+    r = esegui(conn, "SELECT COALESCE(inviti_extra, 0) AS e FROM utenti WHERE id = ?", (uid,)).fetchone()
+    extra = int(r["e"]) if r else 0
+    gratis = max(0, limite - usati)
+    return {"illimitata": False, "gratis": gratis, "extra": extra, "totale": gratis + extra, "limite": limite}
+
+
+def _candidati_invito(conn, tavolo, uid, scheda, genere, interesse, lingua, massimo=60):
+    ora = adesso_it().isoformat()
+    io = utente_per_id(conn, uid)
+    miei = set_interessi((io["interessi"] if io else "") or "")
+    sql = """
+        SELECT u.id, u.nome, u.interessi, u.data_nascita, u.citta, u.foto_url, u.genere, u.lingue
+        FROM utenti u
+        WHERE u.id != ? AND COALESCE(u.sospeso, 0) = 0
+          AND u.id NOT IN (SELECT utente_id FROM iscrizioni WHERE tavolo_id = ?)
+          AND u.id NOT IN (SELECT a_id FROM inviti WHERE tavolo_id = ?)
+    """
+    par = [uid, tavolo["id"], tavolo["id"]]
+    if scheda == "preferiti":
+        sql += """ AND u.id IN (
+                SELECT amico_id FROM amici WHERE utente_id = ?
+                UNION SELECT utente_id FROM amici WHERE amico_id = ?
+                UNION SELECT salvato_id FROM preferiti_utenti WHERE utente_id = ?)"""
+        par += [uid, uid, uid]
+    else:
+        citta = (tavolo["citta"] if scheda == "locale" else (io["citta"] if io else "")) or ""
+        if not citta.strip():
+            return []
+        sql += " AND LOWER(TRIM(COALESCE(u.citta, ''))) = LOWER(TRIM(?))"
+        par.append(citta)
+    if tavolo["esclusivo"] and pagamento_attivo(conn):
+        sql += " AND (COALESCE(u.premium, 0) = 1 OR COALESCE(u.premium_fino, '') > ?)"
+        par.append(ora)
+    sql += " LIMIT 500"
+    righe = esegui(conn, sql, tuple(par)).fetchall()
+    bloccati = relazioni_bloccate(conn, uid)
+    risultato = []
+    for r in righe:
+        if r["id"] in bloccati:
+            continue
+        eta = eta_da(r["data_nascita"])
+        if eta is None:
+            continue
+        if tavolo["eta_min"] is not None and eta < tavolo["eta_min"]:
+            continue
+        if tavolo["eta_max"] is not None and eta > tavolo["eta_max"]:
+            continue
+        if genere in ("donna", "uomo", "altro") and (r["genere"] or "") != genere:
+            continue
+        sue = set_interessi(r["interessi"] or "")
+        if interesse and (set_interessi(interesse) - sue):
+            continue
+        if lingua and lingua not in (r["lingue"] or "").split(", "):
+            continue
+        risultato.append({"id": r["id"], "nome": r["nome"], "eta": eta, "citta": r["citta"] or "",
+                          "foto_url": r["foto_url"], "in_comune": len(miei & sue)})
+    risultato.sort(key=lambda x: (-x["in_comune"], x["nome"] or ""))
+    return risultato[:massimo]
+
+
+def _invia_invito(conn, tavolo, uid, a_id):
+    if a_id == uid or a_id in relazioni_bloccate(conn, uid):
+        return False, "Non puoi invitare questo utente."
+    if e_iscritto(conn, tavolo["id"], a_id):
+        return False, "Partecipa già al banchetto."
+    if esegui(conn, "SELECT 1 AS ok FROM inviti WHERE tavolo_id = ? AND a_id = ?",
+              (tavolo["id"], a_id)).fetchone():
+        return False, "Hai già invitato questo utente."
+    if not utente_per_id(conn, a_id):
+        return False, "Utente non trovato."
+    q = _quota_inviti(conn, uid)
+    if not q["illimitata"] and q["totale"] <= 0:
+        return False, "Hai finito gli inviti: puoi ottenerne altri."
+    esegui(conn, "INSERT INTO inviti (tavolo_id, da_id, a_id, creato_il) VALUES (?, ?, ?, ?)",
+           (tavolo["id"], uid, a_id, adesso_it().isoformat()))
+    if not q["illimitata"] and q["gratis"] <= 0:
+        esegui(conn, "UPDATE utenti SET inviti_extra = COALESCE(inviti_extra, 0) - 1 WHERE id = ?", (uid,))
+    notifica(conn, a_id, "invito", tavolo["tema"],
+             (session.get("utente_nome") or "Un utente") + " ti invita a «" + tavolo["tema"] + "»",
+             url_for("dettaglio_tavolo", tavolo_id=tavolo["id"]), uid)
+    return True, ""
+
+
+def _tavolo_per_invito(conn, tavolo_id):
+    t = esegui(conn, "SELECT id, tema, citta, organizzatore_id, eta_min, eta_max, esclusivo FROM tavoli WHERE id = ?",
+               (tavolo_id,)).fetchone()
+    if not t:
+        conn.close()
+        abort(404)
+    return t
+
+
+@app.route("/tavolo/<int:tavolo_id>/invita")
+@login_richiesto
+def invita_utenti(tavolo_id):
+    uid = session["utente_id"]
+    conn = get_db()
+    tavolo = _tavolo_per_invito(conn, tavolo_id)
+    if not e_iscritto(conn, tavolo_id, uid):
+        conn.close()
+        flash("Puoi invitare altri utenti solo dopo aver preso posto.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    scheda = request.args.get("scheda", "locale")
+    if scheda not in ("locale", "me", "preferiti"):
+        scheda = "locale"
+    genere = request.args.get("genere", "")
+    interesse = request.args.get("interesse", "")
+    lingua = request.args.get("lingua", "")
+    candidati = _candidati_invito(conn, tavolo, uid, scheda, genere, interesse, lingua)
+    quota = _quota_inviti(conn, uid)
+    prezzo = prezzo_alx(conn, "prezzo_pacchetto_inviti", 100)
+    n_pacchetto = prezzo_alx(conn, "pacchetto_inviti_n", 20)
+    conn.close()
+    return render_template("invita.html", tavolo=tavolo, candidati=candidati, quota=quota, scheda=scheda,
+                           genere=genere, interesse=interesse, lingua=lingua,
+                           prezzo_pacchetto=prezzo, n_pacchetto=n_pacchetto)
+
+
+@app.route("/tavolo/<int:tavolo_id>/invita/<int:utente>", methods=["POST"])
+@login_richiesto
+def invita_uno(tavolo_id, utente):
+    uid = session["utente_id"]
+    conn = get_db()
+    tavolo = _tavolo_per_invito(conn, tavolo_id)
+    if not e_iscritto(conn, tavolo_id, uid):
+        conn.close()
+        flash("Puoi invitare altri utenti solo dopo aver preso posto.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    ok, msg = _invia_invito(conn, tavolo, uid, utente)
+    if ok:
+        conn.commit()
+        flash("Invito inviato.")
+    else:
+        flash(msg)
+    conn.close()
+    return redirect(request.referrer or url_for("invita_utenti", tavolo_id=tavolo_id))
+
+
+@app.route("/tavolo/<int:tavolo_id>/invita-rapidi", methods=["POST"])
+@login_richiesto
+def invita_rapidi(tavolo_id):
+    uid = session["utente_id"]
+    conn = get_db()
+    tavolo = _tavolo_per_invito(conn, tavolo_id)
+    if not e_iscritto(conn, tavolo_id, uid):
+        conn.close()
+        flash("Puoi invitare altri utenti solo dopo aver preso posto.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    try:
+        n = int(request.form.get("n", "10"))
+    except ValueError:
+        n = 10
+    n = max(1, min(n, 50))
+    scheda = request.form.get("scheda", "locale")
+    if scheda not in ("locale", "me", "preferiti"):
+        scheda = "locale"
+    candidati = _candidati_invito(conn, tavolo, uid, scheda, request.form.get("genere", ""),
+                                  request.form.get("interesse", ""), request.form.get("lingua", ""), massimo=n)
+    inviati = 0
+    for c in candidati:
+        ok, msg = _invia_invito(conn, tavolo, uid, c["id"])
+        if ok:
+            inviati += 1
+        elif "finito" in msg:
+            break
+    conn.commit()
+    conn.close()
+    if inviati:
+        flash("Inviti inviati: %d." % inviati)
+    else:
+        flash("Nessun invito inviato: la lista è vuota o gli inviti sono finiti.")
+    return redirect(request.referrer or url_for("invita_utenti", tavolo_id=tavolo_id))
+
+
+@app.route("/inviti/acquista", methods=["POST"])
+@login_richiesto
+def inviti_acquista():
+    uid = session["utente_id"]
+    conn = get_db()
+    prezzo = prezzo_alx(conn, "prezzo_pacchetto_inviti", 100)
+    n = prezzo_alx(conn, "pacchetto_inviti_n", 20)
+    ok, msg = spendi_alx(conn, uid, prezzo, "inviti")
+    if ok:
+        esegui(conn, "UPDATE utenti SET inviti_extra = COALESCE(inviti_extra, 0) + ? WHERE id = ?", (n, uid))
+        conn.commit()
+        flash("Hai ottenuto %d inviti." % n)
+    else:
+        flash(msg)
+    conn.close()
+    return redirect(request.referrer or url_for("home"))
 
 
 @app.route("/miei-tavoli")

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invita utenti - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <a class="btn-indietro" href="{{ url_for('dettaglio_tavolo', tavolo_id=tavolo.id) }}">← Torna al banchetto</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        <h3 class="titolo-sezione">📨 Invita utenti</h3>
+        <p class="nota">{{ tavolo.tema }}</p>
+
+        <div class="toggle-vista">
+            <a class="{{ 'attivo' if scheda == 'locale' else '' }}" href="{{ url_for('invita_utenti', tavolo_id=tavolo.id, scheda='locale', genere=genere, interesse=interesse, lingua=lingua) }}">Vicini al locale</a>
+            <a class="{{ 'attivo' if scheda == 'me' else '' }}" href="{{ url_for('invita_utenti', tavolo_id=tavolo.id, scheda='me', genere=genere, interesse=interesse, lingua=lingua) }}">Vicini a me</a>
+            <a class="{{ 'attivo' if scheda == 'preferiti' else '' }}" href="{{ url_for('invita_utenti', tavolo_id=tavolo.id, scheda='preferiti', genere=genere, interesse=interesse, lingua=lingua) }}">Preferiti</a>
+        </div>
+
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>Inviti disponibili: {% if quota.illimitata %}∞{% else %}{{ quota.totale }}{% endif %}</h2>
+            {% if not quota.illimitata %}<p class="nota">{{ quota.gratis }} gratuiti questa settimana (su {{ quota.limite }}) e {{ quota.extra }} extra.</p>
+            <form method="POST" action="{{ url_for('inviti_acquista') }}">
+                <button type="submit" class="btn-piccolo">Ottieni più inviti: {{ n_pacchetto }} per {{ prezzo_pacchetto }} ALX</button>
+            </form>{% endif %}
+        </div></div>
+
+        <form class="form-ricerca" method="GET" action="{{ url_for('invita_utenti', tavolo_id=tavolo.id) }}">
+            <input type="hidden" name="scheda" value="{{ scheda }}">
+            <select name="genere" class="select-tipo">
+                <option value="">Tutti i generi</option>
+                <option value="donna" {% if genere == 'donna' %}selected{% endif %}>Donne</option>
+                <option value="uomo" {% if genere == 'uomo' %}selected{% endif %}>Uomini</option>
+                <option value="altro" {% if genere == 'altro' %}selected{% endif %}>Altro</option>
+            </select>
+            <select name="interesse" class="select-tipo">
+                <option value="">Tutti gli interessi</option>
+                {% for gruppo, voci in GRUPPI_INTERESSI %}<optgroup label="{{ gruppo }}">{% for v in voci %}<option value="{{ v }}" {% if interesse == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</optgroup>{% endfor %}
+            </select>
+            <select name="lingua" class="select-tipo">
+                <option value="">Tutte le lingue</option>
+                {% for l in LINGUE %}<option value="{{ l }}" {% if lingua == l %}selected{% endif %}>{{ l }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn-piccolo">Applica filtri</button>
+        </form>
+
+        <form class="form-ricerca" method="POST" action="{{ url_for('invita_rapidi', tavolo_id=tavolo.id) }}">
+            <input type="hidden" name="scheda" value="{{ scheda }}">
+            <input type="hidden" name="genere" value="{{ genere }}">
+            <input type="hidden" name="interesse" value="{{ interesse }}">
+            <input type="hidden" name="lingua" value="{{ lingua }}">
+            <label for="n">⚡ Inviti rapidi: invita i primi</label>
+            <input type="number" id="n" name="n" min="1" max="50" value="10">
+            <button type="submit" class="btn-piccolo">Invia</button>
+        </form>
+
+        {% if not candidati %}<p class="vuoto">Nessun utente da invitare con questi criteri.</p>{% endif %}
+        {% for c in candidati %}
+        <div class="riga-invito">
+            {% if c.foto_url %}<img class="av-inv" src="{{ c.foto_url }}" alt="">{% else %}<span class="av-inv av-vuoto">{{ (c.nome or '?')[:1] }}</span>{% endif %}
+            <div class="info-part">
+                <strong>{{ c.nome }}, {{ c.eta }}</strong>
+                <p class="interessi">{{ c.citta }}{% if c.in_comune %} · {{ c.in_comune }} interessi in comune{% endif %}</p>
+            </div>
+            <form method="POST" action="{{ url_for('invita_uno', tavolo_id=tavolo.id, utente=c.id) }}">
+                <button type="submit" class="btn-piccolo">Invita</button>
+            </form>
+        </div>
+        {% endfor %}
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

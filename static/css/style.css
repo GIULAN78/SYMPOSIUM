@@ -1503,3 +1503,36 @@ header h1 {
     font-size: 0.75rem;
     color: var(--testo);
 }
+
+/* Inviti */
+.riga-invito {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.5rem 0.6rem;
+    margin: 0.4rem 0;
+    border-radius: 10px;
+    background: #fffdf6;
+    border: 2px solid var(--oro);
+    color: var(--testo);
+}
+
+.riga-invito .info-part {
+    flex: 1;
+}
+
+.av-inv {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--oro);
+}
+
+.av-vuoto {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff3c4;
+    font-family: 'Cinzel Decorative', Georgia, serif;
+}
