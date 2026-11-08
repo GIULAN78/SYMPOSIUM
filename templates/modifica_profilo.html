@@ -46,6 +46,14 @@
 
             <label for="bio">Qualcosa su di me</label>
             <textarea id="bio" name="bio" rows="4">{{ u.bio or '' }}</textarea>
+            <label for="archetipo">Il mio archetipo a tavola (facoltativo)</label>
+            <select id="archetipo" name="archetipo">
+                <option value="">Nessuno</option>
+                {% for slug, nome in ARCHETIPI %}<option value="{{ slug }}" {% if u.archetipo == slug %}selected{% endif %}>{{ nome }}</option>{% endfor %}
+            </select>
+            <label for="instagram">Instagram (facoltativo, solo il nome utente)</label>
+            <input type="text" id="instagram" name="instagram" maxlength="30" value="{{ u.instagram or '' }}" placeholder="nomeutente">
+            <label class="riga-check"><input type="checkbox" name="mostra_segno" value="1" {% if u.mostra_segno %}checked{% endif %}> Mostra il mio segno zodiacale sul profilo</label>
 
             {% with valore_interessi = u.interessi or '' %}{% include "_interessi.html" %}{% endwith %}
             <label for="genere">Genere (facoltativo)</label>

@@ -27,6 +27,7 @@
                 <div>
                     <h2>{{ u.nome }}</h2>
                     <p>{% if u.data_nascita|eta %}{{ u.data_nascita|eta }} anni{% endif %}{% if u.citta %}, {{ u.citta }}{% endif %}</p>
+                    {% set px = profilo_extra(u.id) %}{% if px.segno or px.instagram or px.archetipo %}<p class="nota">{% if px.archetipo %}{{ px.archetipo }}{% endif %}{% if px.segno %}{% if px.archetipo %} · {% endif %}{{ px.segno }}{% endif %}{% if px.instagram %}{% if px.archetipo or px.segno %} · {% endif %}<a href="https://instagram.com/{{ px.instagram }}" target="_blank" rel="noopener nofollow">Instagram @{{ px.instagram }}</a>{% endif %}</p>{% endif %}
                     {% if affidabilita %}
                     <p><span class="badge {% if affidabilita == 'Alta affidabilità' %}badge-conf{% elif affidabilita == 'Affidabilità bassa' %}badge-ass{% endif %}">{{ affidabilita }}</span></p>
                     {% endif %}

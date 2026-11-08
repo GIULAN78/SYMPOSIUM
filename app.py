@@ -1,3 +1,4 @@
+import re
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, send_from_directory, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from markupsafe import escape
@@ -201,6 +202,9 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "instagram", "TEXT")
+    aggiungi_colonna(conn, "utenti", "archetipo", "TEXT")
+    aggiungi_colonna(conn, "utenti", "mostra_segno", "INTEGER")
     aggiungi_colonna(conn, "utenti", "classifica_visibile", "INTEGER")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS match_origine (
@@ -4888,6 +4892,54 @@ def escludi_partecipante(tavolo_id, utente):
     return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
+ARCHETIPI = [
+    ("filosofo", "🏛️ Il Filosofo"), ("poeta", "📜 Il Poeta"), ("guerriero", "🛡️ Il Guerriero"),
+    ("viaggiatore", "⛵ Il Viaggiatore"), ("buongustaio", "🍇 Il Buongustaio"), ("anfitrione", "🔥 L'Anfitrione"),
+    ("musicista", "🎶 Il Musicista"), ("stratega", "🦉 Lo Stratega"),
+]
+app.jinja_env.globals["ARCHETIPI"] = ARCHETIPI
+
+
+def _segno(data_nascita):
+    try:
+        d = datetime.strptime(str(data_nascita)[:10], "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return None
+    m, g = d.month, d.day
+    tabella = [
+        (1, 20, "♑ Capricorno"), (2, 19, "♒ Acquario"), (3, 20, "♓ Pesci"), (4, 20, "♈ Ariete"),
+        (5, 21, "♉ Toro"), (6, 21, "♊ Gemelli"), (7, 22, "♋ Cancro"), (8, 23, "♌ Leone"),
+        (9, 23, "♍ Vergine"), (10, 23, "♎ Bilancia"), (11, 22, "♏ Scorpione"), (12, 22, "♐ Sagittario"),
+    ]
+    for mese, giorno, nome in tabella:
+        if m == mese and g <= giorno:
+            return nome
+        if m == mese - 1 + 1 and False:
+            return nome
+    return "♑ Capricorno" if (m == 12 and g >= 22) else tabella[m - 1][2] if g <= tabella[m - 1][1] else tabella[m % 12][2]
+
+
+def _profilo_extra(uid):
+    vuoto = {"segno": None, "instagram": None, "archetipo": None}
+    try:
+        conn = get_db()
+        r = esegui(conn, "SELECT data_nascita, instagram, archetipo, mostra_segno FROM utenti WHERE id = ?", (uid,)).fetchone()
+        conn.close()
+        if not r:
+            return vuoto
+        etichette = dict(ARCHETIPI)
+        return {
+            "segno": _segno(r["data_nascita"]) if r["mostra_segno"] else None,
+            "instagram": (r["instagram"] or "").strip() or None,
+            "archetipo": etichette.get(r["archetipo"] or ""),
+        }
+    except Exception:
+        return vuoto
+
+
+app.jinja_env.globals["profilo_extra"] = _profilo_extra
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -5386,6 +5438,14 @@ def modifica_profilo():
             genere = ""
         lingue = ", ".join(x for x in request.form.getlist("lingue") if x in LINGUE)
         esegui(conn, "UPDATE utenti SET genere = ?, lingue = ? WHERE id = ?", (genere, lingue, uid))
+        _ig = request.form.get("instagram", "").strip().lstrip("@")
+        if not re.fullmatch(r"[A-Za-z0-9._]{1,30}", _ig or ""):
+            _ig = ""
+        _arc = request.form.get("archetipo", "")
+        if _arc not in dict(ARCHETIPI):
+            _arc = ""
+        esegui(conn, "UPDATE utenti SET instagram = ?, archetipo = ?, mostra_segno = ? WHERE id = ?",
+               (_ig, _arc, 1 if request.form.get("mostra_segno") == "1" else 0, uid))
 
         nuova_foto = salva_foto(request.files.get("foto"), "profili")
         if nuova_foto:
