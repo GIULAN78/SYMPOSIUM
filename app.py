@@ -201,6 +201,16 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS match_origine (
+            id {pk},
+            utente_a INTEGER,
+            utente_b INTEGER,
+            tavolo_id INTEGER,
+            creato_il TEXT,
+            UNIQUE (utente_a, utente_b)
+        )
+    """)
     aggiungi_colonna(conn, "utenti", "termini_il", "TEXT")
     aggiungi_colonna(conn, "tavoli", "alx_pagati", "INTEGER DEFAULT 0")
     esegui(conn, f"""
@@ -4625,6 +4635,46 @@ def _rimborsa_alx(conn, uid, importo, motivo, salva_pendente=True):
     return True
 
 
+def _crea_match(conn, a, b, tavolo_id):
+    gia = e_match(conn, a, b)
+    for x, y in ((a, b), (b, a)):
+        if not esegui(conn, "SELECT 1 AS ok FROM preferiti_utenti WHERE utente_id = ? AND salvato_id = ?", (x, y)).fetchone():
+            esegui(conn, "INSERT INTO preferiti_utenti (utente_id, salvato_id) VALUES (?, ?)", (x, y))
+    lo, hi = min(a, b), max(a, b)
+    if not esegui(conn, "SELECT 1 AS ok FROM match_origine WHERE utente_a = ? AND utente_b = ?", (lo, hi)).fetchone():
+        esegui(conn, "INSERT INTO match_origine (utente_a, utente_b, tavolo_id, creato_il) VALUES (?, ?, ?, ?)",
+               (lo, hi, tavolo_id, adesso_it().isoformat()))
+    if gia:
+        return
+    t = esegui(conn, "SELECT tema FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+    tema = (t["tema"] if t else "") or "il banchetto"
+    for x, y in ((a, b), (b, a)):
+        notifica(conn, x, "match", tema,
+                 "🤝 Hai un match! Vi siete trovati bene al banchetto «" + tema + "»: ora potete scrivervi.",
+                 url_for("chat_privata", altro_id=y), y)
+
+
+def _match_di(altro_id):
+    uid = session.get("utente_id")
+    if not uid:
+        return None
+    try:
+        conn = get_db()
+        if not e_match(conn, uid, altro_id):
+            conn.close()
+            return None
+        lo, hi = min(uid, altro_id), max(uid, altro_id)
+        r = esegui(conn, "SELECT t.tema FROM match_origine m JOIN tavoli t ON t.id = m.tavolo_id WHERE m.utente_a = ? AND m.utente_b = ?",
+                   (lo, hi)).fetchone()
+        conn.close()
+        return {"tema": r["tema"] if r else None}
+    except Exception:
+        return None
+
+
+app.jinja_env.globals["match_di"] = _match_di
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
@@ -4833,6 +4883,17 @@ def feedback_tavolo(tavolo_id):
                     esegui(conn, "INSERT INTO compatibilita (tavolo_id, da_utente, a_utente, punteggio) VALUES (?, ?, ?, ?)",
                            (tavolo_id, uid, a["id"], int(p)))
 
+        for a in altri:
+            if request.form.get(f"presente_{a['id']}") == "1":
+                try:
+                    mio_voto = int(request.form.get(f"compat_{a['id']}", "0"))
+                except ValueError:
+                    mio_voto = 0
+                if mio_voto >= 4:
+                    suo = esegui(conn, "SELECT punteggio FROM compatibilita WHERE tavolo_id = ? AND da_utente = ? AND a_utente = ?",
+                                 (tavolo_id, a["id"], uid)).fetchone()
+                    if suo and int(suo["punteggio"]) >= 4:
+                        _crea_match(conn, uid, a["id"], tavolo_id)
         conn.commit()
         conn.close()
         flash("Grazie! La tua valutazione è stata registrata.")

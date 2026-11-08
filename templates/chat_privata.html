@@ -23,6 +23,10 @@
             <a class="titolo-link-chiaro" href="{{ url_for('profilo_utente', utente_id=altro.id) }}"><strong>{{ altro.nome }}</strong></a>
         </p>
 
+        {% set mt = match_di(altro.id) %}{% if mt %}<div class="box-cerchio" style="text-align:center">
+            <p>🤝 <strong>È un match!</strong></p>
+            <p>{% if mt.tema %}Tu e {{ altro.nome }} vi siete trovati bene al banchetto «{{ mt.tema }}»: scrivi tu il primo messaggio e organizzate il prossimo.{% else %}Tu e {{ altro.nome }} vi siete salvati a vicenda: scrivi tu il primo messaggio.{% endif %}</p>
+        </div>{% endif %}
         <div id="chat-box" class="chat-box" data-lista="{{ url_for('chat_privata_lista', altro_id=altro.id) }}"></div>
 
         {% if puo_inviare %}
