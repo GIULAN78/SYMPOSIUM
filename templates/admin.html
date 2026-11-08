@@ -114,6 +114,12 @@
         </div></div>
 
         {% if chiave_debole %}<p class="flash">⚠️ La chiave segreta dell'app non è impostata su Render: chiunque conosca quella di sviluppo potrebbe falsificare gli accessi. Imposta la variabile SECRET_KEY nell'Environment del servizio SYMPOSIUM.</p>{% endif %}
+        <div class="card-tavolo"><div class="corpo-card">
+            <h2>🔌 Servizi collegati</h2>
+            <p class="nota">Solo sì o no: i valori non si vedono mai.</p>
+            {% for v in extra.servizi %}<p>{{ '✅' if v.impostata else '❌' }} <strong>{{ v.nome }}</strong> · <span class="nota">{{ v.descr }}</span></p>{% endfor %}
+        </div></div>
+
         <h3 class="titolo-sezione">Numeri generali</h3>
         <div class="griglia-stat">
             <div class="stat-card"><strong>{{ stat.utenti }}</strong><span>utenti</span></div>

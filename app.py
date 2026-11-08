@@ -2229,6 +2229,7 @@ def dati_extra():
         "alx_paganti": paganti,
         **_alx_wallet_stats(conn),
         **_locali_admin(conn),
+        "servizi": _servizi_collegati(),
         "premium_attivi": conta(conn, "utenti", "premium_fino > ?", (adesso_it().isoformat(),)),
     }
     conn.close()
@@ -5168,6 +5169,37 @@ def assetlinks():
         "relation": ["delegate_permission/common.handle_all_urls"],
         "target": {"namespace": "android_app", "package_name": pacchetto, "sha256_cert_fingerprints": impronte},
     }])
+
+
+DESCRIZIONI_SERVIZI = {
+    "SECRET_KEY": "chiave segreta degli accessi (obbligatoria)",
+    "DATABASE_URL": "database permanente dei dati (obbligatoria)",
+    "ALEXANDRIA_API_URL": "indirizzo di Alexandria: ALX, email, password dimenticata",
+    "ALEXANDRIA_API_KEY": "chiave di collegamento con Alexandria",
+    "GOOGLE_PLACES_KEY": "foto dei locali da Google",
+    "ADMIN_EMAIL": "email dell'amministratore (richieste dei locali, accesso dal pannello)",
+    "ADMIN_SSO_SECRET": "accesso al pannello dal sito di Alexandria",
+    "CONTATTO_EMAIL": "contatto mostrato nella Privacy",
+    "PLAYSTORE_URL": "link all'app su Google Play",
+    "ANDROID_PACKAGE": "identificativo dell'app Android",
+    "ANDROID_SHA256": "impronta di firma dell'app Android",
+}
+
+
+def _servizi_collegati():
+    import re as _r
+    try:
+        src = open(os.path.abspath(__file__), encoding="utf-8").read()
+    except Exception:
+        return []
+    nomi = set(_r.findall(r'os\.environ\.get\(\s*"([A-Z][A-Z0-9_]+)"', src))
+    nomi -= {"RENDER", "PORT", "PYTHON_VERSION", "RENDER_EXTERNAL_URL"}
+    nomi |= set(DESCRIZIONI_SERVIZI)
+    risultato = []
+    for nome in sorted(nomi, key=lambda n: (n not in DESCRIZIONI_SERVIZI, n)):
+        risultato.append({"nome": nome, "descr": DESCRIZIONI_SERVIZI.get(nome, "usata dall'app"),
+                          "impostata": bool(os.environ.get(nome, "").strip())})
+    return risultato
 
 
 @app.route("/miei-tavoli")
