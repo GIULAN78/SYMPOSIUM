@@ -41,6 +41,37 @@
             </a>
             {% endfor %}
         </div>
+    {% if chat_attivi %}
+        <h3 class="titolo-sezione">🍽️ Banchetti</h3>
+        <div class="lista-notifiche">
+            {% for b in chat_attivi %}
+            <a class="notifica" href="{{ url_for('chat_tavolo', tavolo_id=b.id) }}">
+                <div class="info-part">
+                    <strong>{{ b.tema }}</strong> {% if b.n %}<span class="badge badge-grad">{{ b.n }}</span>{% endif %}
+                    <p>{% if b.ultimo %}{{ b.ultimo[:70] }}{% if b.ultimo|length > 70 %}…{% endif %}{% else %}Nessun messaggio ancora: scrivi per primo.{% endif %}</p>
+                    <span class="nota">{{ b.ora }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if chat_archiviati %}
+        <details>
+            <summary class="titolo-sezione">📦 Archiviati ({{ chat_archiviati|length }})</summary>
+            <div class="lista-notifiche">
+                {% for b in chat_archiviati %}
+                <a class="notifica" href="{{ url_for('chat_tavolo', tavolo_id=b.id) }}">
+                    <div class="info-part">
+                        <strong>{{ b.tema }}</strong>
+                        <p>{% if b.ultimo %}{{ b.ultimo[:70] }}{% if b.ultimo|length > 70 %}…{% endif %}{% else %}Nessun messaggio.{% endif %}</p>
+                        <span class="nota">{{ b.ora }}</span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
     </main>
 <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
 </body>

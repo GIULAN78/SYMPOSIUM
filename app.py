@@ -1811,9 +1811,32 @@ def elenco_messaggi():
             "ora": ora, "non_letti": int(non_letti), "ordine": ultimo["id"] if ultimo else 0,
             "match": altro in match_ids,
         })
+    chat_b = esegui(conn, """
+        SELECT t.id, t.tema, t.data_ora,
+               (SELECT COUNT(*) FROM messaggi m WHERE m.tavolo_id = t.id) AS n,
+               (SELECT m.testo FROM messaggi m WHERE m.tavolo_id = t.id ORDER BY m.id DESC LIMIT 1) AS ultimo,
+               (SELECT m.creato_il FROM messaggi m WHERE m.tavolo_id = t.id ORDER BY m.id DESC LIMIT 1) AS ultimo_il
+        FROM tavoli t JOIN iscrizioni i ON i.tavolo_id = t.id AND i.utente_id = ?
+    """, (uid,)).fetchall()
+    limite_arch = (adesso_it().replace(tzinfo=None) - timedelta(days=1)).isoformat(timespec="minutes")
+    chat_attivi, chat_archiviati = [], []
+    for t in chat_b:
+        try:
+            ora_ult = datetime.fromisoformat(t["ultimo_il"]).strftime("%d/%m %H:%M") if t["ultimo_il"] else ""
+        except (ValueError, TypeError):
+            ora_ult = ""
+        voce = {"id": t["id"], "tema": t["tema"], "n": int(t["n"] or 0), "ultimo": t["ultimo"] or "",
+                "ora": ora_ult, "ordine": t["ultimo_il"] or str(t["data_ora"] or "")}
+        if str(t["data_ora"] or "") < limite_arch:
+            chat_archiviati.append(voce)
+        else:
+            chat_attivi.append(voce)
+    chat_attivi.sort(key=lambda x: x["ordine"], reverse=True)
+    chat_archiviati.sort(key=lambda x: x["ordine"], reverse=True)
     conn.close()
     conversazioni.sort(key=lambda c: c["ordine"], reverse=True)
-    return render_template("messaggi.html", conversazioni=conversazioni)
+    return render_template("messaggi.html", conversazioni=conversazioni,
+                           chat_attivi=chat_attivi, chat_archiviati=chat_archiviati)
 
 
 @app.route("/messaggi/<int:altro_id>")
