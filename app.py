@@ -5258,6 +5258,47 @@ def meta_condivisione(risposta):
     return risposta
 
 
+@app.after_request
+def barra_utente(risposta):
+    try:
+        uid = session.get("utente_id")
+        if (not uid or risposta.status_code != 200 or risposta.mimetype != "text/html"
+                or request.endpoint in (None, "static", "accedi", "registrati", "esci",
+                                        "verifica_email_pagina", "reinvia_verifica")):
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        if "barra-utente" in testo:
+            return risposta
+        import html as _h
+        import re as _r
+        m = _r.search(r"<body[^>]*>", testo)
+        if not m:
+            return risposta
+        conn = get_db()
+        u = esegui(conn, "SELECT nome, foto_url FROM utenti WHERE id = ?", (uid,)).fetchone()
+        conn.close()
+        if not u:
+            return risposta
+        nome = _h.escape(u["nome"] or "")
+        iniz = _h.escape((u["nome"] or "?")[:1].upper())
+        foto = (u["foto_url"] or "").strip()
+        if foto:
+            avatar = '<img class="bu-foto" src="' + _h.escape(foto, quote=True) + '" alt="">'
+            azione = ""
+        else:
+            avatar = '<span class="bu-foto bu-iniz">' + iniz + '</span>'
+            azione = '<a class="bu-foto-manca" href="' + url_for("modifica_profilo") + '">📷 Aggiungi la foto</a>'
+        link_profilo = url_for("profilo_utente", utente_id=uid)
+        html = ('<div id="barra-utente"><a class="bu-sx" href="' + link_profilo + '">'
+                + avatar + '<span class="bu-nome">' + nome + '</span></a>' + azione
+                + '<span class="bu-dx"><a href="' + link_profilo + '">Profilo</a>'
+                + '<a href="' + url_for("esci") + '">Esci</a></span></div>')
+        risposta.set_data(testo[:m.end()] + html + testo[m.end():])
+    except Exception:
+        pass
+    return risposta
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():

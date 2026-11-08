@@ -1618,3 +1618,71 @@ header h1 {
     border: 1px solid #b8860b;
     font-weight: 700;
 }
+
+/* Barra utente */
+#barra-utente {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #0d2a78;
+    border-bottom: 2px solid #c8971f;
+    font-size: 0.95rem;
+}
+
+#barra-utente a {
+    color: #ffe27a;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+#barra-utente .bu-sx {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+#barra-utente .bu-foto {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #c8971f;
+    flex: 0 0 auto;
+}
+
+#barra-utente .bu-iniz {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fffdf6;
+    color: #0f2468;
+    font-weight: 700;
+}
+
+#barra-utente .bu-nome {
+    color: #fffdf6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 34vw;
+}
+
+#barra-utente .bu-foto-manca {
+    font-size: 0.8rem;
+    padding: 3px 8px;
+    border-radius: 8px;
+    border: 1px solid #c8971f;
+    white-space: nowrap;
+}
+
+#barra-utente .bu-dx {
+    display: flex;
+    gap: 14px;
+    flex: 0 0 auto;
+}
