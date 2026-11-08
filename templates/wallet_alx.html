@@ -27,7 +27,7 @@
         </div></div>
         <h3 class="titolo-sezione">Ultimi movimenti</h3>
         {% if not movimenti %}<p class="vuoto">Nessun movimento per ora.</p>{% endif %}
-        {% set nomi = {'ricarica': 'Ricarica', 'premium': 'Premium', 'banchetto_dei': 'Banchetto degli dei', 'inviti': 'Inviti in più', 'rimborso': 'Rimborso'} %}
+        {% set nomi = {'ricarica': 'Ricarica', 'premium': 'Premium', 'banchetto_dei': 'Banchetto degli dei', 'inviti': 'Inviti in più', 'rimborso': 'Rimborso', 'evidenza': 'Banchetto in evidenza'} %}
         {% for m in movimenti %}
         <div class="riga-invito"><div class="info-part">
             <strong>{{ nomi.get(m.tipo, m.tipo) }}</strong>

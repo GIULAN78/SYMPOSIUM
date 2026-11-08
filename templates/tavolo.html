@@ -83,6 +83,7 @@
                     };
                 })();
                 </script>
+                {% set ev = evidenza_info(tavolo.id) %}{% if ev and ev.attiva %}<p class="data">✨ In evidenza fino al {{ ev.fino }}</p>{% elif ev and ev.puo %}<form method="POST" action="{{ url_for('evidenza_tavolo', tavolo_id=tavolo.id) }}" onsubmit="return confirm('Mettere il banchetto in evidenza per 3 giorni{% if ev.prezzo %} per {{ ev.prezzo }} ALX{% endif %}?');"><button type="submit" class="btn-piccolo">✨ Metti in evidenza (3 giorni){% if ev.prezzo %} · {{ ev.prezzo }} ALX{% endif %}</button></form>{% endif %}
                 {% set sp = spesa_di(tavolo.id) %}{% if sp %}<p class="data">💶 circa {{ sp }} € a persona · si paga al locale</p>{% endif %}
                 {% set pt = partner_di(tavolo.id) %}{% if pt %}<p class="data">🤝 Locale partner Symposium{% if pt.sconto %} · {{ pt.sconto }}{% endif %}</p>{% endif %}
                 {% set dc = dopo_di(tavolo.id) %}{% if dc %}<p class="data">🥂 Dopo il banchetto: {{ dc }}</p>{% endif %}

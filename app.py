@@ -202,6 +202,7 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "tavoli", "in_evidenza_fino", "TEXT")
     aggiungi_colonna(conn, "locali", "partner", "INTEGER DEFAULT 0")
     aggiungi_colonna(conn, "locali", "sconto", "TEXT")
     esegui(conn, f"""
@@ -1089,6 +1090,18 @@ def home():
             tavoli = [t for t in tavoli if t["km"] is not None and t["km"] <= int(raggio)]
         if request.args.get("vicini") == "1":
             tavoli.sort(key=lambda t: (t["km"] is None, t["km"] or 0))
+    _ev_ids = set()
+    try:
+        _ce = get_db()
+        _ev_ids = {r["id"] for r in esegui(_ce, "SELECT id FROM tavoli WHERE in_evidenza_fino > ?",
+                                           (adesso_it().replace(tzinfo=None).isoformat(timespec="minutes"),)).fetchall()}
+        _ce.close()
+    except Exception:
+        pass
+    for t in tavoli:
+        t["evidenza"] = t["id"] in _ev_ids
+    if request.args.get("suggeriti") != "1" and request.args.get("vicini") != "1":
+        tavoli.sort(key=lambda t: 0 if t["evidenza"] else 1)
     if request.args.get("json") == "1":
         elenco = [dict(t) for t in tavoli]
         conn2 = get_db()
@@ -2704,6 +2717,7 @@ def prezzi_ctx():
         "pacchetto_inviti_n_v": prezzo_alx(conn, "pacchetto_inviti_n", 20),
         "prezzo_pacchetto_v": prezzo_alx(conn, "prezzo_pacchetto_inviti", 100),
         "limite_google_v": prezzo_alx(conn, "limite_google_giorno", 300),
+        "prezzo_evidenza_v": prezzo_alx(conn, "prezzo_evidenza", 50),
         "pag_attivo": pagamento_attivo(conn),
         "premium_fino": None,
     }
@@ -2770,6 +2784,7 @@ def admin_prezzi():
         ("pacchetto_inviti_n", "pacchetto_inviti_n", 1000),
         ("prezzo_pacchetto", "prezzo_pacchetto_inviti", 100000),
         ("limite_google", "limite_google_giorno", 100000),
+        ("prezzo_evidenza", "prezzo_evidenza", 100000),
     ):
         try:
             valore = int(request.form.get(campo, ""))
@@ -5069,6 +5084,51 @@ def admin_partner():
     conn.commit()
     conn.close()
     return redirect(url_for("admin"))
+
+
+def evidenza_info(tavolo_id):
+    uid = session.get("utente_id")
+    try:
+        conn = get_db()
+        t = esegui(conn, "SELECT organizzatore_id, data_ora, in_evidenza_fino FROM tavoli WHERE id = ?", (tavolo_id,)).fetchone()
+        prezzo = prezzo_alx(conn, "prezzo_evidenza", 50)
+        costa = pagamento_attivo(conn)
+        conn.close()
+        if not t:
+            return None
+        ora = adesso_it().replace(tzinfo=None).isoformat(timespec="minutes")
+        attiva = bool(t["in_evidenza_fino"]) and str(t["in_evidenza_fino"]) > ora
+        puo = bool(uid) and t["organizzatore_id"] == uid and str(t["data_ora"]) > ora and not attiva
+        return {"attiva": attiva, "fino": str(t["in_evidenza_fino"])[:10] if attiva else "",
+                "puo": puo, "prezzo": int(prezzo) if costa else 0}
+    except Exception:
+        return None
+
+
+app.jinja_env.globals["evidenza_info"] = evidenza_info
+
+
+@app.route("/tavolo/<int:tavolo_id>/evidenza", methods=["POST"])
+@login_richiesto
+def evidenza_tavolo(tavolo_id):
+    uid = session["utente_id"]
+    inf = evidenza_info(tavolo_id)
+    if not inf or not inf["puo"]:
+        flash("Puoi mettere in evidenza solo un tuo banchetto futuro che non lo sia già.")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    conn = get_db()
+    if inf["prezzo"] > 0:
+        ok, msg = spendi_alx(conn, uid, inf["prezzo"], "evidenza")
+        if not ok:
+            conn.close()
+            flash(msg)
+            return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    fino = (adesso_it().replace(tzinfo=None) + timedelta(days=3)).isoformat(timespec="minutes")
+    esegui(conn, "UPDATE tavoli SET in_evidenza_fino = ? WHERE id = ?", (fino, tavolo_id))
+    conn.commit()
+    conn.close()
+    flash("Il tuo banchetto è in evidenza per 3 giorni.")
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
 
 @app.route("/miei-tavoli")

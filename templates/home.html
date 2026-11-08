@@ -108,6 +108,7 @@
                 {% set sp = spesa_di(t.id) %}{% if sp %}<p>💶 circa {{ sp }} € a persona</p>{% endif %}
                 {% if t.affinita == 1 %}<p>⭐ Organizzato da qualcuno con cui ti sei trovato bene</p>{% endif %}
                 {% set pt = partner_di(t.id) %}{% if pt %}<p>🤝 Locale partner{% if pt.sconto %} · {{ pt.sconto }}{% endif %}</p>{% endif %}
+                {% if t.evidenza %}<p>✨ In evidenza</p>{% endif %}
                     {% if t.km is defined and t.km is not none %}<p>📏 {{ ('%.1f'|format(t.km))|replace('.', ',') }} km da te</p>{% endif %}
                     {% if t.eta_min is not none and t.eta_max is not none %}
                     <p>👥 Età {{ t.eta_min }}-{{ t.eta_max }}</p>
