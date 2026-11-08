@@ -900,6 +900,8 @@ def e_iscritto(conn, tavolo_id, utente_id):
 
 @app.route("/")
 def home():
+    if "utente_id" not in session and not request.args:
+        return redirect(url_for("benvenuto"))
     q = request.args.get("q", "").strip()
     citta = request.args.get("citta", "").strip()
     solo_eta = request.args.get("eta") == "1"
@@ -4271,6 +4273,24 @@ def push_prova():
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+
+@app.route("/benvenuto")
+def benvenuto():
+    conn = get_db()
+    adesso = adesso_it().replace(tzinfo=None).isoformat(timespec="minutes")
+    try:
+        utenti = int(esegui(conn, "SELECT COUNT(*) AS n FROM utenti WHERE COALESCE(sospeso, 0) = 0").fetchone()["n"])
+        programma = int(esegui(conn, "SELECT COUNT(*) AS n FROM tavoli WHERE data_ora >= ?", (adesso,)).fetchone()["n"])
+        citta = int(esegui(conn, """
+            SELECT COUNT(DISTINCT LOWER(TRIM(citta))) AS n FROM tavoli
+            WHERE data_ora >= ? AND citta IS NOT NULL AND LENGTH(TRIM(citta)) > 0
+        """, (adesso,)).fetchone()["n"])
+    except Exception:
+        utenti = programma = citta = 0
+    conn.close()
+    mostra = utenti >= 20 or programma >= 5
+    return render_template("benvenuto.html", utenti=utenti, programma=programma, citta=citta, mostra=mostra)
 
 
 @app.route("/miei-tavoli")

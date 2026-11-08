@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symposium - Banchetti con persone nuove</title>
+    <meta name="description" content="Symposium: organizza o prendi posto a un banchetto e conosci persone con i tuoi stessi interessi.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a46ac">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1>Symposium</h1>
+        <p class="sottotitolo">Iscriviti a Symposium e crea il tuo banchetto</p>
+        <a class="btn-nuovo" href="{{ url_for('registrati') }}">Registrati</a>
+        <a class="btn-nuovo" href="{{ url_for('accedi') }}">Accedi</a>
+    </header>
+    <main>
+        {% with messaggi = get_flashed_messages() %}{% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}{% endwith %}
+        <h3 class="titolo-sezione">Mangiare insieme è il modo più antico di conoscersi</h3>
+        <p class="nota">Nell'antica Grecia il symposion era il banchetto dopo la cena: si beveva, si parlava, si diventava amici. Symposium lo riporta ai nostri giorni: scegli un banchetto vicino a te, oppure creane uno, e siediti a tavola con persone che condividono i tuoi interessi.</p>
+
+        {% if mostra %}
+        <div class="card-tavolo"><div class="corpo-card">
+            <p><strong>{{ utenti }}</strong> utenti · <strong>{{ programma }}</strong> banchetti in programma · <strong>{{ citta }}</strong> città</p>
+        </div></div>
+        {% endif %}
+
+        <h3 class="titolo-sezione">Come funziona</h3>
+        <div class="card-tavolo"><div class="corpo-card"><h2>1. Scopri</h2><p>Sfoglia i banchetti vicino a te, con filtri per tipologia, orario, distanza e interessi in comune.</p></div></div>
+        <div class="card-tavolo"><div class="corpo-card"><h2>2. Prendi posto</h2><p>Iscriviti con un tocco, oppure chiedi di entrare. Prima della serata si chiacchiera nella chat del banchetto.</p></div></div>
+        <div class="card-tavolo"><div class="corpo-card"><h2>3. Vivi il banchetto</h2><p>Si cena nel locale scelto, ciascuno paga il suo. Dopo la serata si valutano i compagni di tavola e nascono i match.</p></div></div>
+
+        <h3 class="titolo-sezione">Per ogni occasione</h3>
+        <p class="nota">🏛️ Consesso di Afrodite · 🍷 Sissizio, la cena tra compagni · ⚡ Sfide e giochi · 🎭 Muse e cultura · 🏔️ Banchetto sull'Olimpo, per i Premium.</p>
+
+        <h3 class="titolo-sezione">Gratis, con il Premium incluso</h3>
+        <p class="nota">Per ora Symposium è gratuito e tutti hanno il Premium. Le foto del profilo sono personali e l'email viene verificata alla registrazione.</p>
+
+        <p>
+            <a class="btn-nuovo" href="{{ url_for('registrati') }}">Registrati e prendi posto</a>
+            <a class="link-dettaglio" href="{{ url_for('home', vedi=1) }}">Guarda i banchetti</a>
+        </p>
+        
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>
