@@ -201,6 +201,23 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS push_iscrizioni (
+            id {pk},
+            utente_id INTEGER,
+            endpoint TEXT NOT NULL,
+            p256dh TEXT,
+            auth TEXT,
+            creato_il TEXT
+        )
+    """)
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS push_chiavi (
+            id {pk},
+            privata TEXT NOT NULL,
+            pubblica TEXT NOT NULL
+        )
+    """)
     aggiungi_colonna(conn, "tavoli", "spesa_indicativa", "INTEGER")
     aggiungi_colonna(conn, "utenti", "notif_promemoria", "INTEGER DEFAULT 1")
     aggiungi_colonna(conn, "utenti", "notif_ci_manchi", "INTEGER DEFAULT 1")
@@ -992,6 +1009,7 @@ def notifica(conn, utente_id, tipo, titolo, testo, link, da_utente=None):
         INSERT INTO notifiche (utente_id, tipo, titolo, testo, link, da_utente, creato_il, letta)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0)
     """, (utente_id, tipo, titolo, testo, link, da_utente, datetime.now().isoformat()))
+    _invia_push(conn, utente_id, titolo, testo, link)
 
 
 @app.route("/notifiche")
@@ -4143,6 +4161,116 @@ def calendario_tavolo(tavolo_id):
     ]
     return _Resp("\r\n".join(righe) + "\r\n", mimetype="text/calendar",
                  headers={"Content-Disposition": 'attachment; filename="banchetto.ics"'})
+
+
+import os
+from flask import jsonify
+
+
+def _chiavi_push(conn):
+    r = esegui(conn, "SELECT privata, pubblica FROM push_chiavi ORDER BY id LIMIT 1").fetchone()
+    if r:
+        return r["privata"], r["pubblica"]
+    import base64
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    chiave = ec.generate_private_key(ec.SECP256R1())
+    privata_raw = chiave.private_numbers().private_value.to_bytes(32, "big")
+    pubblica_raw = chiave.public_key().public_bytes(serialization.Encoding.X962,
+                                                    serialization.PublicFormat.UncompressedPoint)
+
+    def b64(x):
+        return base64.urlsafe_b64encode(x).rstrip(b"=").decode()
+
+    try:
+        esegui(conn, "INSERT INTO push_chiavi (privata, pubblica) VALUES (?, ?)", (b64(privata_raw), b64(pubblica_raw)))
+        conn.commit()
+    except IntegrityError:
+        conn.rollback()
+    r = esegui(conn, "SELECT privata, pubblica FROM push_chiavi ORDER BY id LIMIT 1").fetchone()
+    return r["privata"], r["pubblica"]
+
+
+def _spedisci_push(elenco, dati, privata, claim):
+    try:
+        from pywebpush import WebPushException, webpush
+    except Exception:
+        return
+    morti = []
+    for endpoint, p256dh, auth in elenco:
+        try:
+            webpush(subscription_info={"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}},
+                    data=dati, vapid_private_key=privata, vapid_claims=dict(claim), ttl=3600)
+        except WebPushException as e:
+            codice = getattr(getattr(e, "response", None), "status_code", None)
+            if codice in (404, 410):
+                morti.append(endpoint)
+        except Exception:
+            pass
+    if morti:
+        try:
+            with app.app_context():
+                c = get_db()
+                for e in morti:
+                    esegui(c, "DELETE FROM push_iscrizioni WHERE endpoint = ?", (e,))
+                c.commit()
+                c.close()
+        except Exception:
+            pass
+
+
+def _invia_push(conn, utente_id, titolo, testo, link):
+    try:
+        import json
+        import threading
+        u = esegui(conn, "SELECT silenzio_da, silenzio_a FROM utenti WHERE id = ?", (utente_id,)).fetchone()
+        if u and _in_silenzio(adesso_it().hour, u["silenzio_da"], u["silenzio_a"]):
+            return
+        righe = esegui(conn, "SELECT endpoint, p256dh, auth FROM push_iscrizioni WHERE utente_id = ?", (utente_id,)).fetchall()
+        if not righe:
+            return
+        privata, _pubblica = _chiavi_push(conn)
+        elenco = [(x["endpoint"], x["p256dh"], x["auth"]) for x in righe]
+        dati = json.dumps({"titolo": titolo or "Symposium", "testo": testo or "", "link": link or "/"})
+        claim = {"sub": "mailto:" + (os.environ.get("ADMIN_EMAIL", "").strip() or "admin@symposium.app")}
+        threading.Thread(target=_spedisci_push, args=(elenco, dati, privata, claim), daemon=True).start()
+    except Exception:
+        pass
+
+
+@app.route("/push/chiave")
+def push_chiave():
+    conn = get_db()
+    _privata, pubblica = _chiavi_push(conn)
+    conn.close()
+    return jsonify({"chiave": pubblica})
+
+
+@app.route("/push/iscrivi", methods=["POST"])
+@login_richiesto
+def push_iscrivi():
+    d = request.get_json(silent=True) or {}
+    endpoint = d.get("endpoint", "")
+    k = d.get("keys") or {}
+    if not endpoint or not k.get("p256dh") or not k.get("auth"):
+        return jsonify({"ok": False}), 400
+    conn = get_db()
+    esegui(conn, "DELETE FROM push_iscrizioni WHERE endpoint = ?", (endpoint,))
+    esegui(conn, "INSERT INTO push_iscrizioni (utente_id, endpoint, p256dh, auth, creato_il) VALUES (?, ?, ?, ?, ?)",
+           (session["utente_id"], endpoint, k["p256dh"], k["auth"], adesso_it().isoformat()))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/push/prova", methods=["POST"])
+@login_richiesto
+def push_prova():
+    conn = get_db()
+    notifica(conn, session["utente_id"], "prova", "Symposium", "Notifica di prova: funziona!", url_for("home"))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/miei-tavoli")

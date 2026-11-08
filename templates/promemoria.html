@@ -31,6 +31,45 @@
             </select>
             <button type="submit" class="btn-nuovo">Salva</button>
         </form>
+        <h3 class="titolo-sezione">📱 Notifiche sul telefono</h3>
+        <p class="nota">Ricevi gli avvisi anche con l'app chiusa. Sull'iPhone funzionano solo se aggiungi Symposium alla schermata Home. Rispettano le ore di silenzio.</p>
+        <button type="button" class="btn-nuovo" id="push-attiva">Attiva le notifiche</button>
+        <button type="button" class="btn-piccolo" id="push-prova">Invia una notifica di prova</button>
+        <p class="nota" id="push-esito"></p>
+        <script>
+        (function () {
+          var esito = document.getElementById("push-esito");
+          function msg(t) { esito.textContent = t; }
+          function chiaveBytes(b64) {
+            var pad = "=".repeat((4 - b64.length % 4) % 4);
+            var raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+            var out = new Uint8Array(raw.length);
+            for (var i = 0; i < raw.length; i++) { out[i] = raw.charCodeAt(i); }
+            return out;
+          }
+          document.getElementById("push-attiva").onclick = async function () {
+            try {
+              if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+                msg("Questo dispositivo non supporta le notifiche push (su iPhone aggiungi prima Symposium alla schermata Home).");
+                return;
+              }
+              var perm = await Notification.requestPermission();
+              if (perm !== "granted") { msg("Permesso negato: abilita le notifiche per questo sito dalle impostazioni del browser."); return; }
+              var reg = await navigator.serviceWorker.ready;
+              var r = await fetch("/push/chiave");
+              var k = (await r.json()).chiave;
+              var sub = await reg.pushManager.getSubscription();
+              if (!sub) { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chiaveBytes(k) }); }
+              var s = await fetch("/push/iscrivi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub) });
+              msg(s.ok ? "Notifiche attivate su questo dispositivo." : "Non sono riuscito ad attivarle: riprova.");
+            } catch (e) { msg("Errore: " + e.message); }
+          };
+          document.getElementById("push-prova").onclick = async function () {
+            var r = await fetch("/push/prova", { method: "POST" });
+            msg(r.ok ? "Notifica di prova inviata: se non arriva entro qualche secondo, attiva prima le notifiche." : "Accedi per provare.");
+          };
+        })();
+        </script>
     </main>
 <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
 </body>
