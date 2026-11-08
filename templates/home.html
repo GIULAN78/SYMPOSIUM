@@ -52,6 +52,8 @@
                 {% for gruppo, elenco in GRUPPI_TIPOLOGIE %}<optgroup label="{{ gruppo }}">{% for ti in elenco %}<option value="{{ ti.slug }}" {% if tipologia_sel == ti.slug %}selected{% endif %}>{{ ti.emoji }} {{ ti.nome }}</option>{% endfor %}</optgroup>{% endfor %}
             </select>
             <label class="filtro"><input type="checkbox" name="suggeriti" value="1" {% if suggeriti_sel %}checked{% endif %}> ✨ Suggeriti</label>
+            <label class="filtro"><input type="checkbox" name="lastminute" value="1" {% if request.args.get('lastminute') == '1' %}checked{% endif %}> ⚡ Last minute</label>
+            {% if utente_nome %}<label class="filtro"><input type="checkbox" name="salvati" value="1" {% if request.args.get('salvati') == '1' %}checked{% endif %}> ❤️ Salvati</label>{% endif %}
             <label class="filtro"><input type="checkbox" name="confermati" value="1" {% if solo_confermati %}checked{% endif %}> Confermati</label>
             {% if pos_attiva %}
             <select name="raggio" class="select-tipo">

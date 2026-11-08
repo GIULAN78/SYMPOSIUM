@@ -1012,6 +1012,17 @@ def home():
         tavoli = [t for t in tavoli if fascia_di(t["data_ora"]) in fasce_sel]
     if tip_sel in TIPOLOGIE_PER_SLUG:
         tavoli = [t for t in tavoli if t["tipologia"] == tip_sel]
+    if request.args.get("lastminute") == "1":
+        _ora = adesso_it().replace(tzinfo=None)
+        _da = _ora.isoformat(timespec="minutes")
+        _a = (_ora + timedelta(hours=48)).isoformat(timespec="minutes")
+        tavoli = [t for t in tavoli if t["data_ora"] and _da <= str(t["data_ora"]) <= _a]
+    if request.args.get("salvati") == "1" and session.get("utente_id"):
+        _cs = get_db()
+        _salvati = {r["tavolo_id"] for r in esegui(_cs, "SELECT tavolo_id FROM preferiti WHERE utente_id = ?",
+                                                    (session["utente_id"],)).fetchall()}
+        _cs.close()
+        tavoli = [t for t in tavoli if t["id"] in _salvati]
 
     tavoli = [dict(t) for t in tavoli]
     miei_int = set_interessi((io["interessi"] if io else "") or "")

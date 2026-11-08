@@ -70,6 +70,19 @@
                 {% endif %}
                 <p class="data">🗓️ {{ tavolo.data_ora|data_it }}</p>
                 <p class="data"><a class="link-dettaglio" href="{{ url_for('calendario_tavolo', tavolo_id=tavolo.id) }}">📅 Aggiungi al calendario</a></p>
+                <p class="data"><button type="button" class="btn-piccolo" id="condividi-btn">📤 Invita un amico con un link</button></p>
+                <script>
+                (function () {
+                    var bt = document.getElementById("condividi-btn");
+                    bt.onclick = function () {
+                        var u = location.href.split("#")[0];
+                        var t = "Vieni al banchetto: " + {{ tavolo.tema|tojson }} + " su Symposium";
+                        if (navigator.share) { navigator.share({ title: "Symposium", text: t, url: u }).catch(function () {}); }
+                        else if (navigator.clipboard) { navigator.clipboard.writeText(u); bt.textContent = "Link copiato!"; }
+                        else { window.prompt("Copia il link:", u); }
+                    };
+                })();
+                </script>
                 {% set sp = spesa_di(tavolo.id) %}{% if sp %}<p class="data">💶 circa {{ sp }} € a persona · si paga al locale</p>{% endif %}
                 {% set dc = dopo_di(tavolo.id) %}{% if dc %}<p class="data">🥂 Dopo il banchetto: {{ dc }}</p>{% endif %}
                 {% if tavolo.eta_min is not none and tavolo.eta_max is not none %}
