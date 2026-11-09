@@ -203,6 +203,7 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "google_id", "TEXT")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS login_tentativi (
             id {pk},
@@ -5177,6 +5178,8 @@ DESCRIZIONI_SERVIZI = {
     "ALEXANDRIA_API_URL": "indirizzo di Alexandria: ALX, email, password dimenticata",
     "ALEXANDRIA_API_KEY": "chiave di collegamento con Alexandria",
     "GOOGLE_PLACES_KEY": "foto dei locali da Google",
+    "GOOGLE_OAUTH_CLIENT_ID": "accesso con Google (ID client)",
+    "GOOGLE_OAUTH_CLIENT_SECRET": "accesso con Google (segreto)",
     "ADMIN_EMAIL": "email dell'amministratore (richieste dei locali, accesso dal pannello)",
     "ADMIN_SSO_SECRET": "accesso al pannello dal sito di Alexandria",
     "CONTATTO_EMAIL": "contatto mostrato nella Privacy",
@@ -5744,6 +5747,96 @@ def accedi():
         flash("Email o password non corretti.")
 
     return render_template("accedi.html")
+
+
+def _google_attivo():
+    return bool(os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "").strip() and os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "").strip())
+
+
+app.jinja_env.globals["google_attivo"] = _google_attivo
+
+
+def _google_redirect():
+    uri = url_for("google_ritorno", _external=True)
+    if uri.startswith("http://") and "localhost" not in uri and "127.0.0.1" not in uri:
+        uri = "https://" + uri[len("http://"):]
+    return uri
+
+
+@app.route("/google/accedi")
+def google_accedi():
+    if not _google_attivo():
+        flash("Accesso con Google non ancora disponibile.")
+        return redirect(url_for("accedi"))
+    import secrets
+    from urllib.parse import urlencode
+    stato = secrets.token_urlsafe(24)
+    session["google_stato"] = stato
+    par = {
+        "client_id": os.environ["GOOGLE_OAUTH_CLIENT_ID"].strip(),
+        "redirect_uri": _google_redirect(),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": stato,
+        "prompt": "select_account",
+    }
+    return redirect("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(par))
+
+
+@app.route("/google/ritorno")
+def google_ritorno():
+    import json
+    import urllib.request
+    from urllib.parse import urlencode
+    if not _google_attivo() or request.args.get("error"):
+        flash("Accesso con Google annullato.")
+        return redirect(url_for("accedi"))
+    atteso = session.pop("google_stato", None)
+    if not atteso or request.args.get("state") != atteso or not request.args.get("code"):
+        flash("Accesso con Google non riuscito: riprova.")
+        return redirect(url_for("accedi"))
+    try:
+        dati = urlencode({
+            "code": request.args["code"],
+            "client_id": os.environ["GOOGLE_OAUTH_CLIENT_ID"].strip(),
+            "client_secret": os.environ["GOOGLE_OAUTH_CLIENT_SECRET"].strip(),
+            "redirect_uri": _google_redirect(),
+            "grant_type": "authorization_code",
+        }).encode()
+        with urllib.request.urlopen(urllib.request.Request("https://oauth2.googleapis.com/token", data=dati), timeout=20) as r:
+            tok = json.loads(r.read().decode())
+        rq = urllib.request.Request("https://openidconnect.googleapis.com/v1/userinfo",
+                                    headers={"Authorization": "Bearer " + tok["access_token"]})
+        with urllib.request.urlopen(rq, timeout=20) as r:
+            info = json.loads(r.read().decode())
+    except Exception:
+        flash("Non riesco a contattare Google: riprova tra qualche secondo.")
+        return redirect(url_for("accedi"))
+    email = (info.get("email") or "").strip().lower()
+    if not email or not info.get("email_verified"):
+        flash("Google non ha confermato la tua email: usa la registrazione con email.")
+        return redirect(url_for("accedi"))
+    conn = get_db()
+    u = esegui(conn, "SELECT id, nome FROM utenti WHERE email = ?", (email,)).fetchone()
+    nuovo = False
+    if u:
+        uid, nome = u["id"], u["nome"]
+        esegui(conn, "UPDATE utenti SET google_id = ?, email_verificata = 1 WHERE id = ?", (info.get("sub"), uid))
+    else:
+        nome = (info.get("name") or email.split("@")[0]).strip()[:60]
+        uid = inserisci(
+            conn,
+            "INSERT INTO utenti (nome, email, password_hash, interessi, creato_il, data_nascita, citta, email_verificata, termini_il, google_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (nome, email, "", "", datetime.now().isoformat(), "", "", 1, adesso_it().isoformat(), info.get("sub")))
+        nuovo = True
+    conn.commit()
+    conn.close()
+    session["utente_id"] = uid
+    session["utente_nome"] = nome
+    if nuovo:
+        flash("Benvenuto! Completa il profilo: data di nascita (maggiorenni) e una foto tua.")
+        return redirect(url_for("modifica_profilo"))
+    return redirect(url_for("home"))
 
 
 @app.route("/esci")

@@ -38,6 +38,9 @@
             {% include "_interessi.html" %}
 
             <p class="nota">💰 Symposium usa gli ALX come unità di pagamento dei servizi a pagamento. Rimborsi, premi ed eventuali resti sono sempre in ALX: li trovi nel tuo Wallet ALX e puoi usarli anche su Alexandria oppure tenerli come accumulo.</p>
+            {% if google_attivo() %}<a class="btn-nuovo" style="display:block;text-align:center;margin-bottom:10px" href="{{ url_for('google_accedi') }}">Continua con Google</a>
+            <p class="nota">Con Google accetti <a href="/privacy">Privacy</a> e <a href="/termini">Termini</a> (compreso il Wallet ALX) e confermi di essere maggiorenne.</p>
+            <p class="nota">oppure con email:</p>{% endif %}
             <label class="riga-check"><input type="checkbox" name="accetto" value="1" required> Ho letto e accetto <a href="/privacy">Privacy</a> e <a href="/termini">Termini</a> (compreso il Wallet ALX) e confermo di essere maggiorenne.</label>
             <button type="submit" class="btn-nuovo">Unisciti a Symposium</button>
             <p class="link-alt">Hai già un account? <a href="{{ url_for('accedi') }}">Accedi</a></p>
