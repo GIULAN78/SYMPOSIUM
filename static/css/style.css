@@ -1702,3 +1702,16 @@ header h1 {
         display: none;
     }
 }
+
+/* Pulsanti in basso */
+.campanella {
+    top: auto !important;
+    bottom: 20px !important;
+    right: 86px !important;
+    width: 46px !important;
+    height: 46px !important;
+}
+
+.campanella.msg-icona {
+    right: 142px !important;
+}
