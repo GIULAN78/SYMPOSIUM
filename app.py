@@ -2565,7 +2565,11 @@ def wallet():
         st3, pk = api_alexandria("GET", "/premium/pacchetti")
         if st3 == 200 and pk and pk.get("attivo"):
             pacchetti = pk.get("pacchetti", {})
-    return render_template("wallet.html", collegato=bool(id_al), configurato=configurato,
+    _cr = get_db()
+    _rr = esegui(_cr, "SELECT saldo FROM wallet_alx WHERE utente_id = ?", (session["utente_id"],)).fetchone()
+    _cr.close()
+    regalo = int(_rr["saldo"] or 0) if _rr else 0
+    return render_template("wallet.html", collegato=bool(id_al), configurato=configurato, regalo=regalo,
                            saldo=saldo, illimitato=illimitato, errore=errore,
                            movimenti=movimenti, pacchetti=pacchetti,
                            codice=session.get("codice_alexandria"))

@@ -54,6 +54,7 @@
             <p class="etichetta">Il tuo saldo</p>
             <p class="saldo-grande">{% if illimitato %}∞{% elif saldo is not none %}{{ saldo }}{% else %}…{% endif %} ALX</p>
             {% if errore %}<p class="nota">{{ errore }}</p>{% endif %}
+            {% if regalo %}<p class="nota">🎁 In più hai <strong>{{ regalo }} ALX in regalo</strong> da Symposium (si spendono per primi, solo su Symposium).</p>{% endif %}
             <form method="POST" action="{{ url_for('wallet_scollega') }}"
                   onsubmit="return confirm('Scollegare il tuo account Alexandria da Symposium?');">
                 <button type="submit" class="btn-piccolo">Scollega Alexandria</button>
