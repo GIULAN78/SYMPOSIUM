@@ -5512,6 +5512,51 @@ def barra_utente(risposta):
     return risposta
 
 
+SCRIPT_PROTEZIONE = """<script>
+(function () {
+    var TAG = ["IMG", "VIDEO", "AUDIO", "CANVAS"];
+    function bloccaMedia(e) {
+        var t = e.target;
+        if (t && TAG.indexOf(t.tagName) !== -1) { e.preventDefault(); }
+    }
+    document.addEventListener("contextmenu", bloccaMedia);
+    document.addEventListener("dragstart", bloccaMedia);
+    window.addEventListener("keydown", function (e) {
+        if ((e.ctrlKey || e.metaKey) && "ps".indexOf(e.key.toLowerCase()) !== -1) { e.preventDefault(); }
+    });
+    window.addEventListener("keyup", function (e) {
+        if (e.key === "PrintScreen") {
+            try { navigator.clipboard.writeText(" "); } catch (err) {}
+            var d = document.createElement("div");
+            d.style.cssText = "position:fixed;inset:0;z-index:99999;background:#0d2a78";
+            document.body.appendChild(d);
+            setTimeout(function () { d.remove(); }, 1500);
+        }
+    });
+    var st = document.createElement("style");
+    st.textContent = "@media print { body { display: none !important; } } img { -webkit-user-drag: none; }";
+    document.head.appendChild(st);
+})();
+</script>"""
+
+
+@app.after_request
+def protezione_contenuti(risposta):
+    try:
+        if risposta.status_code != 200 or risposta.mimetype != "text/html":
+            return risposta
+        if request.endpoint in (None, "static") or request.path.startswith("/admin"):
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        i = testo.rfind("</body>")
+        if i == -1 or "PrintScreen" in testo:
+            return risposta
+        risposta.set_data(testo[:i] + SCRIPT_PROTEZIONE + testo[i:])
+    except Exception:
+        pass
+    return risposta
+
+
 @app.route("/miei-tavoli")
 @login_richiesto
 def miei_tavoli():
