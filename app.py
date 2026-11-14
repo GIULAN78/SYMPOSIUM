@@ -6179,7 +6179,7 @@ def nuovo_tavolo():
             flash("La fascia d'età non è valida.")
             return render_template("nuovo_tavolo.html")
 
-        foto_url = salva_foto(request.files.get("foto"), "tavoli")
+        foto_url = None  # si usano solo le immagini preimpostate delle tipologie
 
         conn = get_db()
         row = esegui(conn, "SELECT id FROM locali WHERE nome = ?", (locale_nome,)).fetchone()
