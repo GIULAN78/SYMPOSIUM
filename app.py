@@ -203,6 +203,8 @@ def init_db():
     aggiungi_colonna(conn, "tavoli", "foto_url", "TEXT")
     aggiungi_colonna(conn, "tavoli", "tipologia", "TEXT")
     aggiungi_colonna(conn, "locali", "google_place_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "ultimo_bonus", "TEXT")
+    aggiungi_colonna(conn, "utenti", "streak_bonus", "INTEGER")
     aggiungi_colonna(conn, "utenti", "google_id", "TEXT")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS login_tentativi (
@@ -2699,6 +2701,14 @@ def spendi_alx(conn, uid, importo, tipo="altro"):
     u = utente_per_id(conn, uid)
     if not u:
         return False, "Utente non trovato."
+    _loc = esegui(conn, "SELECT saldo FROM wallet_alx WHERE utente_id = ?", (uid,)).fetchone()
+    if _loc and int(_loc["saldo"] or 0) >= int(importo):
+        esegui(conn, "UPDATE wallet_alx SET saldo = saldo - ? WHERE utente_id = ?", (int(importo), uid))
+        esegui(conn, "INSERT INTO wallet_alx_mov (utente_id, tipo, importo, creato_il) VALUES (?, ?, ?, ?)",
+               (uid, tipo, int(importo), adesso_it().isoformat()))
+        esegui(conn, "INSERT INTO movimenti_alx (utente_id, tipo, importo, creato_il) VALUES (?, ?, ?, ?)",
+               (uid, tipo, int(importo), adesso_it().isoformat()))
+        return True, ""
     if not u["id_alexandria"]:
         r = esegui(conn, "SELECT saldo FROM wallet_alx WHERE utente_id = ?", (uid,)).fetchone()
         if not r:
@@ -3445,6 +3455,175 @@ def pulsante_crea(risposta):
             html = ('<a id="fab-crea" href="' + url_for("nuovo_tavolo")
                     + '" aria-label="Crea il tuo banchetto" title="Crea il tuo banchetto">+</a>')
             risposta.set_data(testo.replace("</body>", html + "</body>", 1))
+    except Exception:
+        pass
+    return risposta
+
+
+BONUS_BENVENUTO_ALX = 500
+
+
+def _importo_bonus(giorni_di_fila):
+    g = ((giorni_di_fila - 1) % 30) + 1
+    if g <= 7:
+        return 250
+    if g <= 14:
+        return 200
+    if g <= 21:
+        return 150
+    return 100
+
+
+def _calcolo_bonus(ultimo, streak):
+    oggi = adesso_it().date().isoformat()
+    ieri = (adesso_it().date() - timedelta(days=1)).isoformat()
+    if not ultimo:
+        return {"importo": BONUS_BENVENUTO_ALX, "giorno": 1, "benvenuto": True, "gia": False}
+    if ultimo == oggi:
+        return {"importo": 0, "giorno": int(streak or 1), "benvenuto": False, "gia": True}
+    giorno = int(streak or 0) + 1 if ultimo == ieri else 1
+    return {"importo": _importo_bonus(giorno), "giorno": giorno, "benvenuto": False, "gia": False}
+
+
+def _bonus_utente(conn, uid):
+    u = esegui(conn, "SELECT ultimo_bonus, streak_bonus, foto_url FROM utenti WHERE id = ?", (uid,)).fetchone()
+    if not u or not (u["foto_url"] or "").strip() or not email_verificata(conn, uid):
+        return None
+    return _calcolo_bonus(u["ultimo_bonus"], u["streak_bonus"])
+
+
+@app.route("/bonus/riscatta", methods=["POST"])
+@login_richiesto
+def bonus_riscatta():
+    uid = session["utente_id"]
+    conn = get_db()
+    st = _bonus_utente(conn, uid)
+    if not st:
+        conn.close()
+        return jsonify({"ok": False, "messaggio": "Conferma l'email e aggiungi la foto del profilo per ricevere il regalo."})
+    if st["gia"]:
+        conn.close()
+        return jsonify({"ok": False, "messaggio": "Hai già brindato oggi: torna domani!"})
+    oggi = adesso_it().date().isoformat()
+    cur = esegui(conn, "UPDATE utenti SET ultimo_bonus = ?, streak_bonus = ? WHERE id = ? AND (ultimo_bonus IS NULL OR ultimo_bonus != ?)",
+                 (oggi, st["giorno"], uid, oggi))
+    if getattr(cur, "rowcount", 1) != 1:
+        conn.rollback()
+        conn.close()
+        return jsonify({"ok": False, "messaggio": "Hai già brindato oggi: torna domani!"})
+    if esegui(conn, "SELECT 1 AS ok FROM wallet_alx WHERE utente_id = ?", (uid,)).fetchone():
+        esegui(conn, "UPDATE wallet_alx SET saldo = saldo + ? WHERE utente_id = ?", (st["importo"], uid))
+    else:
+        esegui(conn, "INSERT INTO wallet_alx (utente_id, saldo, creato_il) VALUES (?, ?, ?)",
+               (uid, st["importo"], adesso_it().isoformat()))
+    esegui(conn, "INSERT INTO wallet_alx_mov (utente_id, tipo, importo, creato_il) VALUES (?, 'regalo', ?, ?)",
+           (uid, st["importo"], adesso_it().isoformat()))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "importo": st["importo"], "giorno": st["giorno"],
+                    "prossimo": _importo_bonus(st["giorno"] + 1)})
+
+
+HTML_BACCO = """<style>
+#brindisi-bacco{position:fixed;inset:0;z-index:200;background:rgba(13,42,120,.88);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+#brindisi-bacco .bb-card{width:100%;max-width:380px;background:#fffdf6;border:3px solid #c8971f;border-radius:18px;padding:18px 18px 22px;text-align:center;color:#0d2a78;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#brindisi-bacco h2{margin:6px 0 4px;font-size:1.5rem;background:linear-gradient(135deg,#ffd04d,#c8971f,#ffd04d);-webkit-background-clip:text;background-clip:text;color:transparent}
+#brindisi-bacco .bb-testo{margin:0 0 14px;line-height:1.35}
+#brindisi-bacco .bb-dopo{display:block;margin:10px auto 0;background:none;border:0;color:#0d2a78;text-decoration:underline;font:inherit;cursor:pointer}
+#brindisi-bacco #bb-esito{margin:12px 0 0;font-weight:700}
+.bb-braccio{transform-origin:128px 146px;animation:bbBrindisi 2.6s ease-in-out infinite}
+@keyframes bbBrindisi{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(10deg)}}
+.bb-corpo{transform-origin:100px 230px;animation:bbRespiro 3.2s ease-in-out infinite}
+@keyframes bbRespiro{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.015)}}
+.bb-sc path{transform-box:fill-box;transform-origin:center;animation:bbScint 1.8s ease-in-out infinite}
+.bb-sc.s2 path{animation-delay:.6s}
+.bb-sc.s3 path{animation-delay:1.2s}
+@keyframes bbScint{0%,100%{opacity:0;transform:scale(.3)}50%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.bb-braccio,.bb-corpo,.bb-sc path{animation:none}}
+</style>
+<div id="brindisi-bacco" role="dialog" aria-label="Brindisi quotidiano"><div class="bb-card">
+<svg viewBox="0 0 200 230" width="150" height="172" aria-hidden="true">
+<g class="bb-corpo">
+<path d="M72 78 C66 120 70 140 84 150 L116 150 C130 140 134 120 128 78 Z" fill="#4a2c1a"/>
+<path d="M58 230 C56 170 70 140 100 136 C130 140 144 170 142 230 Z" fill="#fffdf6" stroke="#c8971f" stroke-width="2"/>
+<path d="M76 140 C92 160 112 190 130 230" stroke="#7a1f5c" stroke-width="9" fill="none" stroke-linecap="round"/>
+<rect x="92" y="108" width="16" height="30" rx="7" fill="#f2c9a0"/>
+<ellipse cx="100" cy="88" rx="25" ry="28" fill="#f2c9a0"/>
+<path d="M75 82 C80 58 120 56 125 82 C115 70 92 68 75 82 Z" fill="#4a2c1a"/>
+<circle cx="91" cy="90" r="2.6" fill="#2b1a10"/><circle cx="109" cy="90" r="2.6" fill="#2b1a10"/>
+<circle cx="83" cy="99" r="4" fill="#f4a6a0" opacity=".55"/><circle cx="117" cy="99" r="4" fill="#f4a6a0" opacity=".55"/>
+<path d="M91 101 Q100 110 109 101" stroke="#b23a48" stroke-width="3" fill="none" stroke-linecap="round"/>
+<g fill="#3f8f3a"><ellipse cx="78" cy="64" rx="9" ry="5" transform="rotate(-35 78 64)"/><ellipse cx="92" cy="57" rx="9" ry="5" transform="rotate(-10 92 57)"/><ellipse cx="108" cy="57" rx="9" ry="5" transform="rotate(10 108 57)"/><ellipse cx="122" cy="64" rx="9" ry="5" transform="rotate(35 122 64)"/></g>
+<g fill="#6b2d8f"><circle cx="95" cy="54" r="5"/><circle cx="105" cy="54" r="5"/><circle cx="100" cy="61" r="5"/></g>
+<path d="M72 146 C62 166 62 184 70 198" stroke="#f2c9a0" stroke-width="12" fill="none" stroke-linecap="round"/>
+</g>
+<g class="bb-braccio">
+<path d="M128 146 L158 100" stroke="#f2c9a0" stroke-width="12" stroke-linecap="round" fill="none"/>
+<path d="M146 62 L174 62 C174 82 168 90 160 90 C152 90 146 82 146 62 Z" fill="#ffd04d" stroke="#c8971f" stroke-width="2"/>
+<path d="M148 68 L172 68 C171 80 167 86 160 86 C153 86 149 80 148 68 Z" fill="#7a1f5c"/>
+<rect x="158" y="90" width="4" height="12" fill="#c8971f"/>
+<ellipse cx="160" cy="104" rx="10" ry="3" fill="#c8971f"/>
+<circle cx="159" cy="98" r="6.5" fill="#f2c9a0"/>
+</g>
+<g class="bb-sc" transform="translate(182 48)"><path d="M0 -6 L1.6 -1.6 L6 0 L1.6 1.6 L0 6 L-1.6 1.6 L-6 0 L-1.6 -1.6Z" fill="#ffd04d"/></g>
+<g class="bb-sc s2" transform="translate(138 46)"><path d="M0 -6 L1.6 -1.6 L6 0 L1.6 1.6 L0 6 L-1.6 1.6 L-6 0 L-1.6 -1.6Z" fill="#ffd04d"/></g>
+<g class="bb-sc s3" transform="translate(188 84)"><path d="M0 -6 L1.6 -1.6 L6 0 L1.6 1.6 L0 6 L-1.6 1.6 L-6 0 L-1.6 -1.6Z" fill="#ffd04d"/></g>
+</svg>
+<h2>__TITOLO__</h2>
+<p class="bb-testo">__TESTO__</p>
+<button type="button" id="bb-ok" class="btn-nuovo">🍷 Riscatta __IMPORTO__ ALX</button>
+<button type="button" id="bb-dopo" class="bb-dopo">Più tardi</button>
+<p id="bb-esito"></p>
+</div></div>
+<script>
+(function () {
+    var b = document.getElementById("brindisi-bacco");
+    if (!b) return;
+    var ok = document.getElementById("bb-ok"), es = document.getElementById("bb-esito"), dopo = document.getElementById("bb-dopo");
+    dopo.onclick = function () { b.style.display = "none"; };
+    ok.onclick = function () {
+        ok.disabled = true;
+        fetch("/bonus/riscatta", {method: "POST", credentials: "same-origin"})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.ok) {
+                    es.textContent = "🎉 +" + d.importo + " ALX nel tuo Wallet ALX. Domani ne ricevi " + d.prossimo + "!";
+                    ok.style.display = "none";
+                    dopo.textContent = "Chiudi";
+                } else {
+                    es.textContent = d.messaggio || "Non disponibile.";
+                    ok.disabled = false;
+                }
+            })
+            .catch(function () { es.textContent = "Errore di connessione."; ok.disabled = false; });
+    };
+})();
+</script>"""
+
+
+@app.after_request
+def banner_brindisi(risposta):
+    try:
+        if ("utente_id" not in session or risposta.status_code != 200
+                or risposta.mimetype != "text/html" or request.endpoint != "home"):
+            return risposta
+        testo = risposta.get_data(as_text=True)
+        if "</body>" not in testo or "brindisi-bacco" in testo:
+            return risposta
+        conn = get_db()
+        st = _bonus_utente(conn, session["utente_id"])
+        conn.close()
+        if not st or st["gia"]:
+            return risposta
+        if st["benvenuto"]:
+            titolo = "Benvenuto al simposio!"
+            msg = "Bacco ti accoglie con %d ALX in regalo: li spendi su Symposium per inviti e banchetti speciali." % st["importo"]
+        else:
+            titolo = "Brindisi del giorno!"
+            msg = "Giorno %d di fila: alza il calice e ritira i tuoi ALX in regalo. Se salti un giorno, si riparte da capo." % st["giorno"]
+        html = (HTML_BACCO.replace("__TITOLO__", titolo).replace("__TESTO__", msg)
+                .replace("__IMPORTO__", str(st["importo"])))
+        risposta.set_data(testo.replace("</body>", html + "</body>", 1))
     except Exception:
         pass
     return risposta
