@@ -6191,6 +6191,44 @@ def facebook_ritorno():
     return redirect(url_for("home"))
 
 
+@app.route("/facebook/eliminazione", methods=["POST"])
+def facebook_eliminazione():
+    import base64
+    import hashlib
+    import hmac
+    import json
+    import secrets
+    segreto = os.environ.get("FACEBOOK_APP_SECRET", "").strip()
+    try:
+        firma, payload = request.form.get("signed_request", "").split(".", 1)
+
+        def _b64(x):
+            return base64.urlsafe_b64decode(x + "=" * (-len(x) % 4))
+
+        atteso = hmac.new(segreto.encode(), payload.encode(), hashlib.sha256).digest()
+        if not segreto or not hmac.compare_digest(_b64(firma), atteso):
+            return jsonify({"errore": "firma non valida"}), 400
+        fb_id = str(json.loads(_b64(payload)).get("user_id") or "").strip()
+    except Exception:
+        return jsonify({"errore": "richiesta non valida"}), 400
+    if not fb_id:
+        return jsonify({"errore": "utente mancante"}), 400
+    conn = get_db()
+    u = esegui(conn, "SELECT id, password_hash, google_id FROM utenti WHERE facebook_id = ?", (fb_id,)).fetchone()
+    if u:
+        if (u["password_hash"] or "").strip() or (u["google_id"] or "").strip():
+            esegui(conn, "UPDATE utenti SET facebook_id = NULL WHERE id = ?", (u["id"],))
+        else:
+            cancella_utente(conn, u["id"])
+        conn.commit()
+    conn.close()
+    codice = secrets.token_hex(8)
+    stato = url_for("eliminazione_dati", _external=True)
+    if stato.startswith("http://") and "localhost" not in stato and "127.0.0.1" not in stato:
+        stato = "https://" + stato[len("http://"):]
+    return jsonify({"url": stato + "?codice=" + codice, "confirmation_code": codice})
+
+
 @app.route("/esci")
 def esci():
     session.clear()
