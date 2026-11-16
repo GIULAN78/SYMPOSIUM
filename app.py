@@ -214,6 +214,7 @@ def init_db():
     aggiungi_colonna(conn, "utenti", "ultimo_bonus", "TEXT")
     aggiungi_colonna(conn, "utenti", "streak_bonus", "INTEGER")
     aggiungi_colonna(conn, "utenti", "google_id", "TEXT")
+    aggiungi_colonna(conn, "utenti", "facebook_id", "TEXT")
     esegui(conn, f"""
         CREATE TABLE IF NOT EXISTS login_tentativi (
             id {pk},
@@ -5379,6 +5380,7 @@ def assetlinks():
 
 DESCRIZIONI_SERVIZI = {
     "SECRET_KEY": "chiave segreta degli accessi (obbligatoria)",
+    "FACEBOOK_APP_SECRET": "chiave segreta di Facebook Login",
     "DATABASE_URL": "database permanente dei dati (obbligatoria)",
     "ALEXANDRIA_API_URL": "indirizzo di Alexandria: ALX, email, password dimenticata",
     "ALEXANDRIA_API_KEY": "chiave di collegamento con Alexandria",
@@ -6078,6 +6080,106 @@ def google_ritorno():
             conn,
             "INSERT INTO utenti (nome, email, password_hash, interessi, creato_il, data_nascita, citta, email_verificata, termini_il, google_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (nome, email, "", "", datetime.now().isoformat(), "", "", 1, adesso_it().isoformat(), info.get("sub")))
+        nuovo = True
+    conn.commit()
+    conn.close()
+    session["utente_id"] = uid
+    session["utente_nome"] = nome
+    if nuovo:
+        flash("Benvenuto! Completa il profilo: data di nascita (maggiorenni) e una foto tua.")
+        return redirect(url_for("modifica_profilo"))
+    return redirect(url_for("home"))
+
+
+def _facebook_id_app():
+    return os.environ.get("FACEBOOK_APP_ID", "1442077694209089").strip()
+
+
+def _facebook_attivo():
+    return bool(_facebook_id_app() and os.environ.get("FACEBOOK_APP_SECRET", "").strip())
+
+
+app.jinja_env.globals["facebook_attivo"] = _facebook_attivo
+
+
+def _facebook_redirect():
+    uri = url_for("facebook_ritorno", _external=True)
+    if uri.startswith("http://") and "localhost" not in uri and "127.0.0.1" not in uri:
+        uri = "https://" + uri[len("http://"):]
+    return uri
+
+
+@app.route("/facebook/accedi")
+def facebook_accedi():
+    if not _facebook_attivo():
+        flash("Accesso con Facebook non ancora disponibile.")
+        return redirect(url_for("accedi"))
+    import secrets
+    from urllib.parse import urlencode
+    stato = secrets.token_urlsafe(24)
+    session["facebook_stato"] = stato
+    par = {
+        "client_id": _facebook_id_app(),
+        "redirect_uri": _facebook_redirect(),
+        "state": stato,
+        "scope": "public_profile,email",
+        "response_type": "code",
+    }
+    return redirect("https://www.facebook.com/v21.0/dialog/oauth?" + urlencode(par))
+
+
+@app.route("/facebook/ritorno")
+def facebook_ritorno():
+    import json
+    import urllib.request
+    from urllib.parse import urlencode
+    if not _facebook_attivo() or request.args.get("error"):
+        flash("Accesso con Facebook annullato.")
+        return redirect(url_for("accedi"))
+    atteso = session.pop("facebook_stato", None)
+    if not atteso or request.args.get("state") != atteso or not request.args.get("code"):
+        flash("Accesso con Facebook non riuscito: riprova.")
+        return redirect(url_for("accedi"))
+    try:
+        par = urlencode({
+            "client_id": _facebook_id_app(),
+            "client_secret": os.environ["FACEBOOK_APP_SECRET"].strip(),
+            "redirect_uri": _facebook_redirect(),
+            "code": request.args["code"],
+        })
+        with urllib.request.urlopen("https://graph.facebook.com/v21.0/oauth/access_token?" + par, timeout=20) as r:
+            tok = json.loads(r.read().decode())
+        par2 = urlencode({"fields": "id,name,email", "access_token": tok["access_token"]})
+        with urllib.request.urlopen("https://graph.facebook.com/v21.0/me?" + par2, timeout=20) as r:
+            info = json.loads(r.read().decode())
+    except Exception:
+        flash("Non riesco a contattare Facebook: riprova tra qualche secondo.")
+        return redirect(url_for("accedi"))
+    fb_id = str(info.get("id") or "").strip()
+    email = (info.get("email") or "").strip().lower()
+    if not fb_id:
+        flash("Facebook non ha restituito i dati: riprova.")
+        return redirect(url_for("accedi"))
+    conn = get_db()
+    u = esegui(conn, "SELECT id, nome FROM utenti WHERE facebook_id = ?", (fb_id,)).fetchone()
+    if not u and email:
+        u = esegui(conn, "SELECT id, nome FROM utenti WHERE email = ?", (email,)).fetchone()
+    nuovo = False
+    if u:
+        uid, nome = u["id"], u["nome"]
+        esegui(conn, "UPDATE utenti SET facebook_id = ? WHERE id = ?", (fb_id, uid))
+        if email:
+            esegui(conn, "UPDATE utenti SET email_verificata = 1 WHERE id = ? AND email = ?", (uid, email))
+    else:
+        if not email:
+            conn.close()
+            flash("Facebook non ha condiviso la tua email: usa la registrazione con email oppure con Google.")
+            return redirect(url_for("accedi"))
+        nome = (info.get("name") or email.split("@")[0]).strip()[:60]
+        uid = inserisci(
+            conn,
+            "INSERT INTO utenti (nome, email, password_hash, interessi, creato_il, data_nascita, citta, email_verificata, termini_il, facebook_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (nome, email, "", "", datetime.now().isoformat(), "", "", 1, adesso_it().isoformat(), fb_id))
         nuovo = True
     conn.commit()
     conn.close()

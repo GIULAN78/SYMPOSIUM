@@ -26,6 +26,7 @@
             <label for="password">Password</label>
             <input type="password" id="password" name="password" required>
 
+            {% if facebook_attivo() %}<a class="btn-nuovo" style="display:block;text-align:center;margin-bottom:10px" href="{{ url_for('facebook_accedi') }}">Continua con Facebook</a>{% endif %}
             {% if google_attivo() %}<a class="btn-nuovo" style="display:block;text-align:center;margin-bottom:10px" href="{{ url_for('google_accedi') }}">Continua con Google</a>
             <p class="nota">Con Google accetti <a href="/privacy">Privacy</a> e <a href="/termini">Termini</a> (compreso il Wallet ALX) e confermi di essere maggiorenne.</p>
             <p class="nota">oppure con email:</p>{% endif %}
