@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if pagina == 'privacy' %}Privacy{% elif pagina == 'termini' %}Termini{% else %}FAQ{% endif %} - Symposium</title>
+    <title>{% if pagina == 'privacy' %}Privacy{% elif pagina == 'termini' %}Termini{% elif pagina == 'eliminazione' %}Eliminazione dei dati{% else %}FAQ{% endif %} - Symposium</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0d2a78">
@@ -72,6 +72,15 @@
                 <h3>I tuoi diritti</h3>
                 <p>Puoi chiedere accesso, rettifica, cancellazione, limitazione e portabilità dei dati, opporti al trattamento e revocare il consenso.{% if contatto %} Per esercitare i tuoi diritti scrivi a {{ contatto }}.{% endif %} Puoi modificare il profilo e cancellare l'account direttamente dalle Impostazioni. Hai diritto di presentare reclamo al Garante per la protezione dei dati personali.</p>
 
+            {% elif pagina == 'eliminazione' %}
+                <h2>Eliminazione dei dati</h2>
+                <p>Puoi eliminare in qualsiasi momento il tuo account Symposium e i dati collegati (profilo, foto, iscrizioni, messaggi e preferenze), anche se hai effettuato l'accesso con Google o Facebook.</p>
+                <h3>Come fare dall'app</h3>
+                <p>Accedi, apri <strong>Impostazioni</strong> e scegli <strong>Cancella account</strong>. La cancellazione è immediata.</p>
+                <h3>Come fare via email</h3>
+                <p>Se non riesci ad accedere, scrivi a {% if contatto %}<strong>{{ contatto }}</strong>{% else %}il gestore di Symposium{% endif %} dall'indirizzo email dell'account, con oggetto «Eliminazione dati»: i dati vengono eliminati entro 30 giorni.</p>
+                <h3>Accesso con Facebook</h3>
+                <p>Rimuovere Symposium dalle app collegate al tuo profilo Facebook (Impostazioni &gt; App e siti web) revoca l'accesso, ma non elimina i dati già presenti su Symposium: per quelli segui una delle due procedure qui sopra.</p>
             {% elif pagina == 'termini' %}
                 <h2>Termini di utilizzo</h2>
                 <p class="nota">Bozza in revisione. Ultimo aggiornamento: novembre 2026.</p>

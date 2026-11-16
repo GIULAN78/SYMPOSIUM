@@ -1674,6 +1674,11 @@ def termini():
     return pagina_info("termini")
 
 
+@app.route("/eliminazione-dati")
+def eliminazione_dati():
+    return pagina_info("eliminazione")
+
+
 @app.route("/faq")
 def faq():
     return pagina_info("faq")
