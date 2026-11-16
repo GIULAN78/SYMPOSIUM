@@ -54,7 +54,9 @@
                 <form class="form-tavolo form-nobordo" method="POST" action="{{ url_for('elimina_account') }}"
                       onsubmit="return confirm('Eliminare DEFINITIVAMENTE il tuo account e i banchetti che hai organizzato?');">
                     <label for="password">Conferma con la tua password</label>
-                    <input type="password" id="password" name="password" required>
+                    <input type="password" id="password" name="password" autocomplete="current-password">
+                    <label for="conferma">Se hai effettuato l'accesso con Google o Facebook (senza password), scrivi ELIMINA</label>
+                    <input type="text" id="conferma" name="conferma" autocomplete="off">
                     <button type="submit" class="btn-annulla">Elimina il mio account</button>
                 </form>
             </div>

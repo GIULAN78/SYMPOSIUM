@@ -1624,9 +1624,16 @@ def elimina_account():
     uid = session["utente_id"]
     conn = get_db()
     u = utente_per_id(conn, uid)
-    if not u or not u["password_hash"] or not check_password_hash(u["password_hash"], request.form.get("password", "")):
+    if not u:
         conn.close()
-        flash("Password non corretta: l'account non è stato eliminato.")
+        return redirect(url_for("impostazioni"))
+    if u["password_hash"]:
+        conferma_ok = check_password_hash(u["password_hash"], request.form.get("password", ""))
+    else:
+        conferma_ok = request.form.get("conferma", "").strip().upper() == "ELIMINA"
+    if not conferma_ok:
+        conn.close()
+        flash("Conferma non corretta: l'account non è stato eliminato.")
         return redirect(url_for("impostazioni"))
 
     ids = [r["id"] for r in esegui(conn, "SELECT id FROM tavoli WHERE organizzatore_id = ?", (uid,)).fetchall()]
