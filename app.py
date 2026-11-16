@@ -1265,21 +1265,34 @@ def chiama_overpass(query):
         richiesta = urllib.request.Request(
             url, data=dati, headers={"User-Agent": "Symposium/1.0 (social eating app)"})
         with urllib.request.urlopen(richiesta, timeout=22) as r:
-            return json.loads(r.read().decode())
+            risposta = json.loads(r.read().decode())
+        if not isinstance(risposta, dict):
+            raise ValueError("risposta non valida")
+        if not risposta.get("elements") and risposta.get("remark"):
+            raise RuntimeError("server sovraccarico")
+        return risposta
 
     ultimo = "nessuna risposta"
+    vuota = None
     ex = ThreadPoolExecutor(len(ENDPOINT_OVERPASS))
     futuri = {ex.submit(uno, u): u for u in ENDPOINT_OVERPASS}
     try:
         for f in as_completed(futuri, timeout=24):
             try:
-                return f.result(), None
+                risposta = f.result()
             except Exception as e:
                 ultimo = type(e).__name__ + " da " + str(urllib.parse.urlparse(futuri[f]).hostname)
+                continue
+            if risposta.get("elements"):
+                return risposta, None
+            if vuota is None:
+                vuota = risposta
     except Exception:
         ultimo = "tempo scaduto"
     finally:
         ex.shutdown(wait=False)
+    if vuota is not None:
+        return vuota, None
     return None, ultimo
 
 
