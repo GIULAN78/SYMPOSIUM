@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>I miei modelli - Symposium</title>
+    <title>I miei preimpostati - Symposium</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0d2a78">
@@ -20,25 +20,30 @@
         {% with messaggi = get_flashed_messages() %}
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
-        <h3 class="titolo-sezione">I miei modelli</h3>
-        <p class="nota">Un modello conserva tipologia, locale e impostazioni di un banchetto: per rifarlo basta scegliere la data. Per salvarne uno, spunta «Salva come modello» quando crei un banchetto.</p>
+        <h3 class="titolo-sezione">I miei preimpostati</h3>
+        <p class="nota">Un preimpostato conserva il tipo di banchetto, il giorno e l'ora, o entrambi. Per crearne uno, quando fai un banchetto rispondi «Sì» al banner «Vuoi salvare questo tipo di banchetto tra i preimpostati?».</p>
         {% if modelli|length == 0 %}
-            <p class="vuoto">Non hai ancora nessun modello. <a class="link-dettaglio" href="{{ url_for('nuovo_tavolo') }}">Crea un banchetto</a> e spunta «Salva come modello».</p>
+            <p class="vuoto">Non hai ancora nessun preimpostato. <a class="link-dettaglio" href="{{ url_for('nuovo_tavolo') }}">Crea un banchetto</a> e rispondi «Sì» al banner.</p>
         {% endif %}
         <div class="lista-tavoli">
             {% for m in modelli %}
             {% set t = TIPOLOGIE_PER_SLUG.get(m.tipologia) %}
             <div class="card-tavolo">
+                {% if m.cosa == 'giorno' %}
+                <h2>🗓️ {{ m.nome }}</h2>
+                <p class="nota">Solo giorno e ora: scegli tu tipologia e locale.</p>
+                <a class="btn-nuovo" href="{{ url_for('nuovo_tavolo', data_ora=m.suggerita) }}">Crea un banchetto per {{ m.giorno_nome }}</a>
+                {% else %}
                 <h2>{% if t %}{{ t.emoji }} {% endif %}{{ m.nome }}</h2>
                 <p>📍 {{ m.locale }}{% if m.citta %}, {{ m.citta }}{% endif %}</p>
-                <p>👥 fino a {{ m.posti }} persone{% if m.spesa %} · circa {{ m.spesa }} €{% endif %}</p>
+                <p>👥 fino a {{ m.posti }} persone{% if m.spesa %} · circa {{ m.spesa }} €{% endif %}{% if m.cosa == 'entrambi' %} · 🗓️ ogni {{ m.giorno_nome }} alle {{ m.ora }}{% endif %}</p>
                 {% if m.ripeti_giorni and m.prossima_data %}
                 <p>🔁 {% if m.ripeti_giorni == 7 %}Ogni settimana{% elif m.ripeti_giorni == 14 %}Ogni 2 settimane{% else %}Ogni 4 settimane{% endif %} · prossimo: {{ m.prossima_data|data_it }}</p>
                 {% endif %}
 
                 <form method="POST" action="{{ url_for('modello_crea', mid=m.id) }}">
                     <label for="crea-{{ m.id }}">Crea un banchetto adesso: quando?</label>
-                    <input type="datetime-local" id="crea-{{ m.id }}" name="data_ora" required>
+                    <input type="datetime-local" id="crea-{{ m.id }}" name="data_ora" value="{{ m.suggerita }}" required>
                     <button type="submit" class="btn-nuovo">Crea il banchetto</button>
                 </form>
 
@@ -53,13 +58,14 @@
                             <option value="28" {% if m.ripeti_giorni == 28 %}selected{% endif %}>Ogni 4 settimane</option>
                         </select>
                         <label for="ripd-{{ m.id }}">Data e ora del prossimo banchetto</label>
-                        <input type="datetime-local" id="ripd-{{ m.id }}" name="data_ora" value="{{ m.prossima_data or '' }}">
+                        <input type="datetime-local" id="ripd-{{ m.id }}" name="data_ora" value="{{ m.prossima_data or m.suggerita or '' }}">
                         <button type="submit" class="btn-nuovo">Salva ripetizione</button>
                     </form>
                 </details>
+                {% endif %}
 
-                <form method="POST" action="{{ url_for('modello_elimina', mid=m.id) }}" onsubmit="return confirm('Eliminare questo modello?');">
-                    <button type="submit" class="link-dettaglio">🗑️ Elimina modello</button>
+                <form method="POST" action="{{ url_for('modello_elimina', mid=m.id) }}" onsubmit="return confirm('Eliminare questo preimpostato?');">
+                    <button type="submit" class="link-dettaglio">🗑️ Elimina</button>
                 </form>
             </div>
             {% endfor %}

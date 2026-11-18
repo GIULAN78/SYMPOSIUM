@@ -20,8 +20,8 @@
         {% with messaggi = get_flashed_messages() %}
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
-        <p><a class="link-dettaglio" href="{{ url_for('modelli') }}">📋 Usa un modello salvato</a></p>
-        <form class="form-tavolo" method="POST" action="{{ url_for('nuovo_tavolo') }}" enctype="multipart/form-data">
+        <p><a class="link-dettaglio" href="{{ url_for('modelli') }}">📋 Usa un preimpostato</a></p>
+        <form class="form-tavolo" method="POST" action="{{ url_for('nuovo_tavolo') }}">
             <label for="tipologia">Che banchetto vuoi organizzare? *</label>
             <select id="tipologia" name="tipologia" required>
                 <option value="">Scegli la tipologia...</option>
@@ -38,66 +38,25 @@
             <input type="hidden" name="lat" value="{{ request.args.get('lat', '') }}">
             <input type="hidden" name="lng" value="{{ request.args.get('lng', '') }}">
             <input type="hidden" name="cerchio_id" value="{{ request.args.get('cerchio', '') }}">
+            <input type="hidden" name="tema" value="{{ request.args.get('tema', '') }}">
+            <input type="hidden" name="eta_min" value="{{ request.args.get('eta_min', 18) }}">
+            <input type="hidden" name="eta_max" value="{{ request.args.get('eta_max', 65) }}">
             <a class="link-dettaglio" href="/locali">🔎 Cerca nei locali d'Italia</a>
 
             <label for="citta">Città</label>
             <input type="text" id="citta" name="citta" value="{{ request.args.get('citta', '') }}" placeholder="Es. Novara" required>
 
             <label for="data_ora">Data e ora</label>
-            <input type="datetime-local" id="data_ora" name="data_ora" required>
+            <input type="datetime-local" id="data_ora" name="data_ora" value="{{ request.args.get('data_ora', '') }}" required>
 
             <label for="posti_totali">Quante persone al massimo?</label>
-            <input type="number" id="posti_totali" name="posti_totali" min="2" max="20" value="8">
+            <input type="number" id="posti_totali" name="posti_totali" min="2" max="20" value="{{ request.args.get('posti', 8) }}">
 
-            <label class="riga-check"><input type="checkbox" name="salva_modello" value="1"> 💾 Salva come modello (per rifarlo in un tocco)</label>
-            <label for="ripeti">Ripeti in automatico</label>
-            <select id="ripeti" name="ripeti">
-                <option value="">No, solo questa volta</option>
-                <option value="7">Ogni settimana</option>
-                <option value="14">Ogni 2 settimane</option>
-                <option value="28">Ogni 4 settimane</option>
-            </select>
-            <p class="nota">Con la ripetizione il banchetto viene creato da solo, una settimana prima, allo stesso giorno e alla stessa ora.</p>
-
-            <details class="altre-opzioni">
-                <summary>⚙️ Altre opzioni (facoltative)</summary>
-                <label for="tema">Titolo del banchetto</label>
-                <input type="text" id="tema" name="tema" placeholder="Se lo lasci vuoto usiamo il nome della tipologia">
-
-                <label for="descrizione">Descrizione</label>
-                <textarea id="descrizione" name="descrizione" rows="4" placeholder="Di cosa si parlerà, che tipo di serata, chi cerchi al banchetto..."></textarea>
-
-                <label for="min_partecipanti">Minimo partecipanti per confermare il banchetto</label>
-                <input type="number" id="min_partecipanti" name="min_partecipanti" min="2" max="20" value="4">
-
-                <label for="eta_min">Età minima</label>
-                <input type="number" id="eta_min" name="eta_min" min="18" max="99" value="18">
-
-                <label for="eta_max">Età massima</label>
-                <input type="number" id="eta_max" name="eta_max" min="18" max="99" value="65">
-
-                <label for="obiettivo">Obiettivo</label>
-                <input type="text" id="obiettivo" name="obiettivo" placeholder="Es. Niente smartphone al banchetto">
-                <label for="spesa_indicativa">Spesa indicativa a persona in €</label>
-                <input type="number" id="spesa_indicativa" name="spesa_indicativa" min="1" max="500" placeholder="Es. 25">
-                <label for="dopo_cena">Dopo il banchetto: dove si continua?</label>
-                <input type="text" id="dopo_cena" name="dopo_cena" maxlength="120" placeholder="Es. Un bar qui vicino">
-
-                {% if sono_premium %}
-                <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Banchetto degli dei (riservato ai Premium) {% if pag_attivo %}· costa {{ prezzo_dei }} ALX{% else %}· gratis per ora{% endif %}</label>
-                {% endif %}
-                <label class="riga-check"><input type="checkbox" name="su_richiesta" value="1"> 🔒 Su richiesta (approvo io chi partecipa)</label>
-                <label for="raggio_km">Distanza massima dal locale</label>
-                <select id="raggio_km" name="raggio_km">
-                    <option value="">Nessun limite</option>
-                    <option value="10">Entro 10 km</option>
-                    <option value="30">Entro 30 km</option>
-                    <option value="50">Entro 50 km</option>
-                    <option value="100">Entro 100 km</option>
-                </select>
-                <label class="riga-check"><input type="checkbox" name="gusto_limite" value="1"> 🎯 Solo per chi condivide almeno un interesse con la tipologia</label>
-            </details>
+            {% if sono_premium %}
+            <label class="riga-check"><input type="checkbox" name="esclusivo" value="1"> ⭐ Banchetto degli dei (riservato ai Premium) {% if pag_attivo %}· costa {{ prezzo_dei }} ALX{% else %}· gratis per ora{% endif %}</label>
+            {% endif %}
             <button type="submit" class="btn-nuovo">Crea banchetto</button>
+            <p class="nota">Descrizione, età, spesa e altre opzioni le puoi aggiungere dopo, quando vuoi.</p>
         </form>
     </main>
 <script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
@@ -122,12 +81,6 @@
         var v = p.get(chiave), e = document.getElementById(id);
         if (v && e) { e.value = v; }
     }
-    imposta("tema", "tema");
-    var _a = document.querySelector("details.altre-opzioni");
-    if (_a && (p.get("tema") || p.get("eta_min") || p.get("eta_max"))) { _a.open = true; }
-    imposta("posti_totali", "posti");
-    imposta("eta_min", "eta_min");
-    imposta("eta_max", "eta_max");
     var t = p.get("tipologia"), s = document.getElementById("tipologia");
     if (t && s) { s.value = t; s.dispatchEvent(new Event("change")); }
 })();

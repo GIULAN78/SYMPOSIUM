@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dettagli del banchetto - Symposium</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0d2a78">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:ital,wght@0,700;1,700&display=swap">
+</head>
+<body>
+    <header>
+        <h1><a class="logo-link" href="{{ url_for('home') }}">Symposium</a></h1>
+    </header>
+
+    <main>
+        {% with messaggi = get_flashed_messages() %}
+            {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
+        {% endwith %}
+        <h3 class="titolo-sezione">Dettagli facoltativi</h3>
+        <p class="nota">Tutto quello che non hai indicato alla creazione: puoi compilarlo adesso o più avanti.</p>
+        <form class="form-tavolo" method="POST" action="{{ url_for('tavolo_dettagli', tavolo_id=t.id) }}">
+            <label for="tema">Titolo del banchetto</label>
+            <input type="text" id="tema" name="tema" maxlength="120" value="{{ t.tema or '' }}">
+
+            <label for="descrizione">Descrizione</label>
+            <textarea id="descrizione" name="descrizione" rows="4" placeholder="Di cosa si parlerà, che tipo di serata, chi cerchi al banchetto...">{{ t.descrizione or '' }}</textarea>
+
+            <label for="min_partecipanti">Minimo partecipanti per confermare il banchetto</label>
+            <input type="number" id="min_partecipanti" name="min_partecipanti" min="2" max="20" value="{{ t.min_partecipanti or 4 }}">
+
+            <label for="eta_min">Età minima</label>
+            <input type="number" id="eta_min" name="eta_min" min="18" max="99" value="{{ t.eta_min or 18 }}">
+
+            <label for="eta_max">Età massima</label>
+            <input type="number" id="eta_max" name="eta_max" min="18" max="99" value="{{ t.eta_max or 65 }}">
+
+            <label for="obiettivo">Obiettivo</label>
+            <input type="text" id="obiettivo" name="obiettivo" value="{{ t.obiettivo or '' }}" placeholder="Es. Niente smartphone al banchetto">
+
+            <label for="spesa_indicativa">Spesa indicativa a persona in €</label>
+            <input type="number" id="spesa_indicativa" name="spesa_indicativa" min="1" max="500" value="{{ t.spesa_indicativa or '' }}" placeholder="Es. 25">
+
+            <label for="dopo_cena">Dopo il banchetto: dove si continua?</label>
+            <input type="text" id="dopo_cena" name="dopo_cena" maxlength="120" value="{{ t.dopo_cena or '' }}" placeholder="Es. Un bar qui vicino">
+
+            <label class="riga-check"><input type="checkbox" name="su_richiesta" value="1" {% if t.su_richiesta %}checked{% endif %}> 🔒 Su richiesta (approvo io chi partecipa)</label>
+
+            <label for="raggio_km">Distanza massima dal locale</label>
+            <select id="raggio_km" name="raggio_km">
+                <option value="">Nessun limite</option>
+                {% for km in (10, 30, 50, 100) %}<option value="{{ km }}" {% if t.raggio_km == km %}selected{% endif %}>Entro {{ km }} km</option>{% endfor %}
+            </select>
+
+            <label class="riga-check"><input type="checkbox" name="gusto_limite" value="1" {% if t.gusto_limite %}checked{% endif %}> 🎯 Solo per chi condivide almeno un interesse con la tipologia</label>
+
+            <button type="submit" class="btn-nuovo">Salva</button>
+            <p><a class="link-dettaglio" href="{{ url_for('dettaglio_tavolo', tavolo_id=t.id) }}">← Torna al banchetto</a></p>
+        </form>
+    </main>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }</script>
+</body>
+</html>

@@ -650,6 +650,9 @@ def init_db():
             creato_il TEXT
         )
     """)
+    aggiungi_colonna(conn, "modelli_tavolo", "cosa", "TEXT")
+    aggiungi_colonna(conn, "modelli_tavolo", "giorno_sett", "INTEGER")
+    aggiungi_colonna(conn, "modelli_tavolo", "ora", "TEXT")
 
     conn.commit()
     conn.close()
@@ -6384,18 +6387,6 @@ def modifica_profilo():
 @app.route("/tavolo/nuovo", methods=["GET", "POST"])
 @login_richiesto
 def nuovo_tavolo():
-    _c = get_db()
-    _ok = email_verificata(_c, session["utente_id"])
-    _c.close()
-    if not _ok:
-        flash("Conferma la tua email per creare un banchetto: controlla la posta.")
-        return redirect(url_for("home"))
-    _c = get_db()
-    _f = esegui(_c, "SELECT foto_url FROM utenti WHERE id = ?", (session["utente_id"],)).fetchone()
-    _c.close()
-    if not _f or not (_f["foto_url"] or "").strip():
-        flash("Aggiungi una foto personale al tuo profilo per creare un banchetto.")
-        return redirect(url_for("modifica_profilo"))
     from datetime import timedelta as _td
     _c = get_db()
     _n_assenze = int(esegui(_c, "SELECT COUNT(*) AS n FROM assenze WHERE utente_id = ? AND creato_il > ?",
@@ -6414,7 +6405,7 @@ def nuovo_tavolo():
         obiettivo = request.form.get("obiettivo", "")
         descrizione = request.form.get("descrizione", "").strip()
         posti = int(request.form.get("posti_totali", 6))
-        minimo = int(request.form.get("min_partecipanti", 2))
+        minimo = int(request.form.get("min_partecipanti", 4))
         eta_min = int(request.form.get("eta_min", 18))
         eta_max = int(request.form.get("eta_max", 65))
         tipologia = request.form.get("tipologia", "")
@@ -6461,14 +6452,9 @@ def nuovo_tavolo():
             conn.close()
             flash(errore)
             return render_template("nuovo_tavolo.html")
-        ripeti = request.form.get("ripeti", "")
-        if request.form.get("salva_modello") == "1" or ripeti in ("7", "14", "28"):
-            avviso = salva_modello(conn, utente_id, dati, ripeti)
-            if avviso:
-                flash(avviso)
         conn.commit()
         conn.close()
-        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id, preset=1))
 
     return render_template("nuovo_tavolo.html")
 
@@ -6557,13 +6543,31 @@ COLONNE_MODELLO = ("tipologia", "tema", "locale", "citta", "lat", "lng", "posti"
                    "gusto_limite", "su_richiesta")
 
 
-def salva_modello(conn, utente_id, dati, ripeti):
+GIORNI_IT = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+
+
+def salva_modello(conn, utente_id, dati, ripeti, cosa="tipo", giorno=None, ora=None):
+    """cosa: tipo, giorno oppure entrambi."""
+    if cosa == "giorno":
+        esiste = esegui(conn, """
+            SELECT id FROM modelli_tavolo
+            WHERE utente_id = ? AND cosa = 'giorno' AND giorno_sett = ? AND ora = ?
+        """, (utente_id, giorno, ora)).fetchone()
+        if not esiste:
+            inserisci(conn, """
+                INSERT INTO modelli_tavolo (utente_id, nome, cosa, giorno_sett, ora, ripeti_giorni, creato_il)
+                VALUES (?, ?, 'giorno', ?, ?, 0, ?)
+            """, (utente_id, "Ogni " + GIORNI_IT[giorno] + " alle " + ora, giorno, ora,
+                  datetime.now().isoformat()))
+        return None
     t = TIPOLOGIE_PER_SLUG[dati["tipologia"]]
-    giorni = int(ripeti) if ripeti in ("7", "14", "28") else 0
+    giorni = int(ripeti) if (ripeti in ("7", "14", "28") and cosa == "entrambi") else 0
     avviso = None
     if giorni and t["esclusiva"]:
         giorni = 0
-        avviso = "I banchetti degli dei non si ripetono in automatico: il modello è stato salvato senza ripetizione."
+        avviso = "I banchetti degli dei non si ripetono in automatico: salvato senza ripetizione."
+    if cosa != "entrambi":
+        giorno, ora = None, None
     prossima = None
     if giorni:
         prossima = (datetime.fromisoformat(dati["data_ora"]) + timedelta(days=giorni)).isoformat(timespec="minutes")
@@ -6581,25 +6585,117 @@ def salva_modello(conn, utente_id, dati, ripeti):
     """, (utente_id, dati["tipologia"], dati["locale"], dati["citta"])).fetchone()
     if esiste:
         imposta = ", ".join(c + " = ?" for c in COLONNE_MODELLO)
-        esegui(conn, "UPDATE modelli_tavolo SET " + imposta + ", ripeti_giorni = ?, prossima_data = ? WHERE id = ?",
-               tuple(valori[c] for c in COLONNE_MODELLO) + (giorni, prossima, esiste["id"]))
+        esegui(conn, "UPDATE modelli_tavolo SET " + imposta +
+               ", ripeti_giorni = ?, prossima_data = ?, cosa = ?, giorno_sett = ?, ora = ? WHERE id = ?",
+               tuple(valori[c] for c in COLONNE_MODELLO) + (giorni, prossima, cosa, giorno, ora, esiste["id"]))
     else:
         nome = (t["nome"] + " - " + dati["locale"])[:80]
         colonne = ", ".join(COLONNE_MODELLO)
         segnaposto = ", ".join("?" for _ in COLONNE_MODELLO)
         inserisci(conn, "INSERT INTO modelli_tavolo (utente_id, nome, " + colonne +
-                  ", ripeti_giorni, prossima_data, creato_il) VALUES (?, ?, " + segnaposto + ", ?, ?, ?)",
+                  ", ripeti_giorni, prossima_data, creato_il, cosa, giorno_sett, ora) VALUES (?, ?, " +
+                  segnaposto + ", ?, ?, ?, ?, ?, ?)",
                   (utente_id, nome) + tuple(valori[c] for c in COLONNE_MODELLO) +
-                  (giorni, prossima, datetime.now().isoformat()))
+                  (giorni, prossima, datetime.now().isoformat(), cosa, giorno, ora))
     return avviso
 
 
+def prossimo_giorno(giorno, ora):
+    """Prossima data futura con quel giorno della settimana e quell'ora (per datetime-local)."""
+    adesso = adesso_it().replace(tzinfo=None)
+    try:
+        h, m = [int(x) for x in ora.split(":")]
+    except (ValueError, AttributeError):
+        h, m = 20, 0
+    d = adesso.replace(hour=h, minute=m, second=0, microsecond=0)
+    d += timedelta(days=(giorno - d.weekday()) % 7)
+    if d <= adesso:
+        d += timedelta(days=7)
+    return d.isoformat(timespec="minutes")
+
+
+def dati_da_tavolo(conn, t):
+    l = esegui(conn, "SELECT nome FROM locali WHERE id = ?", (t["locale_id"],)).fetchone()
+    tip = TIPOLOGIE_PER_SLUG.get(t["tipologia"] or "")
+    return {
+        "tema": t["tema"] or "", "locale": l["nome"] if l else "", "citta": t["citta"] or "",
+        "data_ora": t["data_ora"], "obiettivo": t["obiettivo"] or "", "descrizione": t["descrizione"] or "",
+        "posti": int(t["posti_totali"] or 8), "minimo": int(t["min_partecipanti"] or 4),
+        "eta_min": int(t["eta_min"] or 18), "eta_max": int(t["eta_max"] or 65),
+        "tipologia": t["tipologia"], "esclusivo_sel": bool(tip and tip["esclusiva"]),
+        "raggio_km": t["raggio_km"], "gusto_limite": int(t["gusto_limite"] or 0),
+        "spesa": t["spesa_indicativa"], "dopo": t["dopo_cena"] or "", "cerchio_id": "",
+        "su_richiesta": bool(t["su_richiesta"]), "lat": t["lat"], "lng": t["lng"],
+    }
+
+
+@app.route("/tavolo/<int:tavolo_id>/preset", methods=["POST"])
+@login_richiesto
+def tavolo_preset(tavolo_id):
+    conn = get_db()
+    t = esegui(conn, "SELECT * FROM tavoli WHERE id = ? AND organizzatore_id = ?",
+               (tavolo_id, session["utente_id"])).fetchone()
+    if not t or t["tipologia"] not in TIPOLOGIE_PER_SLUG:
+        conn.close()
+        abort(404)
+    cosa = request.form.get("cosa", "tipo")
+    if cosa not in ("tipo", "giorno", "entrambi"):
+        cosa = "tipo"
+    quando = datetime.fromisoformat(t["data_ora"])
+    avviso = salva_modello(conn, session["utente_id"], dati_da_tavolo(conn, t),
+                           request.form.get("ripeti", ""), cosa, quando.weekday(), quando.strftime("%H:%M"))
+    conn.commit()
+    conn.close()
+    flash(avviso or "Salvato tra i preimpostati ✓")
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
+@app.route("/tavolo/<int:tavolo_id>/dettagli", methods=["GET", "POST"])
+@login_richiesto
+def tavolo_dettagli(tavolo_id):
+    conn = get_db()
+    t = esegui(conn, "SELECT * FROM tavoli WHERE id = ? AND organizzatore_id = ?",
+               (tavolo_id, session["utente_id"])).fetchone()
+    if not t:
+        conn.close()
+        abort(404)
+    if request.method == "POST":
+        def numero(chiave, minimo, massimo, difetto):
+            try:
+                v = int(request.form.get(chiave, "").strip())
+            except ValueError:
+                return difetto
+            return v if minimo <= v <= massimo else difetto
+        posti = int(t["posti_totali"] or 8)
+        tema = request.form.get("tema", "").strip()[:120] or t["tema"]
+        eta_min = numero("eta_min", 18, 99, 18)
+        eta_max = numero("eta_max", 18, 99, 65)
+        if eta_min > eta_max:
+            conn.close()
+            flash("La fascia d'età non è valida.")
+            return redirect(url_for("tavolo_dettagli", tavolo_id=tavolo_id))
+        minimo = max(2, min(numero("min_partecipanti", 2, 20, 4), posti))
+        r = request.form.get("raggio_km", "")
+        esegui(conn, """
+            UPDATE tavoli SET tema = ?, descrizione = ?, obiettivo = ?, min_partecipanti = ?,
+                eta_min = ?, eta_max = ?, spesa_indicativa = ?, dopo_cena = ?, su_richiesta = ?,
+                raggio_km = ?, gusto_limite = ?
+            WHERE id = ?
+        """, (tema, request.form.get("descrizione", "").strip(), request.form.get("obiettivo", "").strip(),
+              minimo, eta_min, eta_max, numero("spesa_indicativa", 1, 500, None),
+              request.form.get("dopo_cena", "").strip()[:120],
+              1 if request.form.get("su_richiesta") == "1" else 0,
+              int(r) if r in ("10", "30", "50", "100") else None,
+              1 if request.form.get("gusto_limite") == "1" else 0, tavolo_id))
+        conn.commit()
+        conn.close()
+        flash("Dettagli aggiornati ✓")
+        return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+    conn.close()
+    return render_template("dettagli_tavolo.html", t=t)
+
+
 def blocco_creazione(conn, uid):
-    if not email_verificata(conn, uid):
-        return "Conferma la tua email per creare un banchetto: controlla la posta."
-    f = esegui(conn, "SELECT foto_url FROM utenti WHERE id = ?", (uid,)).fetchone()
-    if not f or not (f["foto_url"] or "").strip():
-        return "Aggiungi una foto personale al tuo profilo per creare un banchetto."
     n = int(esegui(conn, "SELECT COUNT(*) AS n FROM assenze WHERE utente_id = ? AND creato_il > ?",
                    (uid, (adesso_it().replace(tzinfo=None) - timedelta(days=60)).isoformat())).fetchone()["n"])
     if n >= 3:
@@ -6665,7 +6761,14 @@ def modelli():
     righe = esegui(conn, "SELECT * FROM modelli_tavolo WHERE utente_id = ? ORDER BY id DESC",
                    (session["utente_id"],)).fetchall()
     conn.close()
-    return render_template("modelli.html", modelli=righe)
+    elenco = []
+    for r in righe:
+        d = dict(r)
+        d["cosa"] = d.get("cosa") or "tipo"
+        d["giorno_nome"] = GIORNI_IT[d["giorno_sett"]] if d.get("giorno_sett") is not None else None
+        d["suggerita"] = prossimo_giorno(d["giorno_sett"], d.get("ora")) if d.get("giorno_sett") is not None else ""
+        elenco.append(d)
+    return render_template("modelli.html", modelli=elenco)
 
 
 def _modello_proprio(conn, mid):
@@ -6682,6 +6785,9 @@ def _modello_proprio(conn, mid):
 def modello_crea(mid):
     conn = get_db()
     m = _modello_proprio(conn, mid)
+    if (m["cosa"] or "tipo") == "giorno":
+        conn.close()
+        return redirect(url_for("nuovo_tavolo", data_ora=prossimo_giorno(m["giorno_sett"], m["ora"])))
     data_ora = request.form.get("data_ora", "").strip()
     try:
         quando = datetime.fromisoformat(data_ora)

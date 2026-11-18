@@ -1728,3 +1728,18 @@ details.altre-opzioni summary {
     font-weight: bold;
     color: var(--notte);
 }
+
+.banner-preset {
+    margin: 1rem 0;
+    padding: 0.9rem 1rem;
+    background: #fffdf6;
+    border: 2px solid var(--oro);
+    border-radius: 12px;
+}
+
+.banner-preset .banner-bottoni {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    align-items: center;
+}

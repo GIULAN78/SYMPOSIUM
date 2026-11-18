@@ -22,6 +22,47 @@
             {% for m in messaggi %}<p class="flash">{{ m }}</p>{% endfor %}
         {% endwith %}
 
+        {% if sono_organizzatore and request.args.get('preset') %}
+        <div class="banner-preset">
+            <p><strong>💾 Vuoi salvare questo tipo di banchetto tra i preimpostati?</strong></p>
+            <p class="nota">La prossima volta lo crei in un tocco.</p>
+            <div class="banner-bottoni">
+                <button type="button" class="btn-nuovo" id="preset-si">Sì</button>
+                <a class="btn-annulla" href="{{ url_for('dettaglio_tavolo', tavolo_id=tavolo.id) }}">No</a>
+                <a class="btn-annulla" href="{{ url_for('dettaglio_tavolo', tavolo_id=tavolo.id) }}">Decido dopo</a>
+            </div>
+            <form method="POST" action="{{ url_for('tavolo_preset', tavolo_id=tavolo.id) }}" id="preset-form" style="display:none">
+                <p><strong>Cosa vuoi salvare?</strong></p>
+                <label class="riga-check"><input type="radio" name="cosa" value="tipo" checked> Solo il tipo di banchetto (locale, numero di invitati, età e impostazioni)</label>
+                <label class="riga-check"><input type="radio" name="cosa" value="giorno"> Solo il giorno e l'ora (es. sempre la domenica alle 20:30)</label>
+                <label class="riga-check"><input type="radio" name="cosa" value="entrambi"> Tipo e giorno insieme</label>
+                <div id="preset-ripeti" style="display:none">
+                    <label for="preset-rip">Ripeti in automatico</label>
+                    <select id="preset-rip" name="ripeti">
+                        <option value="">No, lo creo io ogni volta</option>
+                        <option value="7">Ogni settimana</option>
+                        <option value="14">Ogni 2 settimane</option>
+                        <option value="28">Ogni 4 settimane</option>
+                    </select>
+                    <p class="nota">Il banchetto viene creato da solo una settimana prima.</p>
+                </div>
+                <button type="submit" class="btn-nuovo">Salva tra i preimpostati</button>
+            </form>
+        </div>
+        <script>
+        (function () {
+            var si = document.getElementById("preset-si"), f = document.getElementById("preset-form");
+            if (!si || !f) { return; }
+            si.addEventListener("click", function () { f.style.display = "block"; si.style.display = "none"; });
+            var rip = document.getElementById("preset-ripeti");
+            f.addEventListener("change", function () {
+                var v = f.querySelector('input[name="cosa"]:checked').value;
+                rip.style.display = v === "entrambi" ? "block" : "none";
+            });
+        })();
+        </script>
+        {% endif %}
+
         <div class="card-tavolo card-con-foto">
             {% if tavolo.foto_url %}
             <img class="copertina" src="{{ tavolo.foto_url }}" alt="{{ tavolo.tema }}">
@@ -116,6 +157,8 @@
                     <button class="btn-iscriviti" disabled>Sei l'organizzatore</button>
                     <a class="btn-nuovo" href="{{ url_for('chat_tavolo', tavolo_id=tavolo.id) }}">💬 Chat del banchetto</a>
                     <a class="btn-nuovo" href="{{ url_for('invita_utenti', tavolo_id=tavolo.id) }}">📨 Invita utenti</a>
+                    <a class="btn-nuovo" href="{{ url_for('tavolo_dettagli', tavolo_id=tavolo.id) }}">⚙️ Aggiungi dettagli</a>
+                    <a class="btn-nuovo" href="{{ url_for('dettaglio_tavolo', tavolo_id=tavolo.id, preset=1) }}">💾 Salva tra i preimpostati</a>
                     <form action="{{ url_for('elimina_tavolo', tavolo_id=tavolo.id) }}" method="POST"
                           onsubmit="return confirm('Eliminare definitivamente questo banchetto e tutte le iscrizioni?');">
                         <button type="submit" class="btn-annulla">Elimina banchetto</button>
