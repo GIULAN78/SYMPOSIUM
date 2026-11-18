@@ -18,6 +18,7 @@
     </header>
 
     <main>
+        <p><a class="link-dettaglio" href="{{ url_for('modelli') }}">📋 I miei modelli e banchetti ricorrenti</a></p>
         <h3 class="titolo-sezione">Banchetti che organizzo</h3>
         {% if organizzati|length == 0 %}
             <p class="vuoto">Non hai ancora organizzato nessun banchetto.</p>

@@ -1715,3 +1715,16 @@ header h1 {
 .campanella.msg-icona {
     right: 142px !important;
 }
+
+details.altre-opzioni {
+    margin-top: 1.2rem;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--oro);
+    border-radius: 12px;
+}
+
+details.altre-opzioni summary {
+    cursor: pointer;
+    font-weight: bold;
+    color: var(--notte);
+}

@@ -623,6 +623,33 @@ def init_db():
         )
     """)
     aggiungi_colonna(conn, "segnalazioni", "gestita", "INTEGER DEFAULT 0")
+    esegui(conn, f"""
+        CREATE TABLE IF NOT EXISTS modelli_tavolo (
+            id {pk},
+            utente_id INTEGER REFERENCES utenti (id),
+            nome TEXT,
+            tipologia TEXT,
+            tema TEXT,
+            locale TEXT,
+            citta TEXT,
+            lat DOUBLE PRECISION,
+            lng DOUBLE PRECISION,
+            posti INTEGER,
+            minimo INTEGER,
+            eta_min INTEGER,
+            eta_max INTEGER,
+            obiettivo TEXT,
+            descrizione TEXT,
+            spesa INTEGER,
+            dopo_cena TEXT,
+            raggio_km INTEGER,
+            gusto_limite INTEGER DEFAULT 0,
+            su_richiesta INTEGER DEFAULT 0,
+            ripeti_giorni INTEGER DEFAULT 0,
+            prossima_data TEXT,
+            creato_il TEXT
+        )
+    """)
 
     conn.commit()
     conn.close()
@@ -4337,6 +4364,7 @@ def esegui_promemoria():
         if _rimborsa_alx(conn, r["utente_id"], r["importo"], r["motivo"], salva_pendente=False):
             esegui(conn, "DELETE FROM rimborsi_pendenti WHERE id = ?", (r["id"],))
             esiti["rimborsi"] = esiti.get("rimborsi", 0) + 1
+    esiti["ricorrenti"] = crea_ricorrenze(conn)
     conn.commit()
 
     conn.close()
@@ -6379,7 +6407,7 @@ def nuovo_tavolo():
     if _n_assenze == 2 and request.method == "GET":
         flash("Attenzione: hai già saltato 2 banchetti negli ultimi 60 giorni. Al terzo non potrai crearne di nuovi.")
     if request.method == "POST":
-        tema = request.form["tema"]
+        tema = request.form.get("tema", "").strip()
         locale_nome = request.form["locale"]
         citta = request.form.get("citta", "").strip()
         data_ora = request.form["data_ora"]
@@ -6394,104 +6422,336 @@ def nuovo_tavolo():
             flash("Scegli la tipologia del banchetto.")
             return render_template("nuovo_tavolo.html")
         esclusivo_sel = request.form.get("esclusivo") == "1" or TIPOLOGIE_PER_SLUG[tipologia]["esclusiva"]
+        if not tema:
+            tema = TIPOLOGIE_PER_SLUG[tipologia]["nome"] + " - " + locale_nome
+        minimo = max(2, min(minimo, posti))
 
-        if minimo > posti:
-            flash("Il minimo di partecipanti non può superare i posti disponibili.")
-            return render_template("nuovo_tavolo.html")
         if eta_min > eta_max:
             flash("La fascia d'età non è valida.")
             return render_template("nuovo_tavolo.html")
 
-        foto_url = None  # si usano solo le immagini preimpostate delle tipologie
-
-        conn = get_db()
-        row = esegui(conn, "SELECT id FROM locali WHERE nome = ?", (locale_nome,)).fetchone()
-        if row:
-            locale_id = row["id"]
-        else:
-            locale_id = inserisci(conn, "INSERT INTO locali (nome, indirizzo) VALUES (?, ?)", (locale_nome, ""))
-
-        utente_id = session["utente_id"]
-        _alx_pagati = 0
-        if esclusivo_sel and pagamento_attivo(conn) and not e_admin(conn, utente_id):
-            if not e_premium(conn, utente_id):
-                conn.close()
-                flash("I banchetti degli dei sono riservati agli utenti Premium: attiva il Premium dalla pagina Premium.")
-                return render_template("nuovo_tavolo.html")
-            costo_dei = prezzo_alx(conn, "prezzo_banchetto_dei", 200)
-            if costo_dei > 0:
-                ok_spesa, msg_spesa = spendi_alx(conn, utente_id, costo_dei, "banchetto_dei")
-                if not ok_spesa:
-                    conn.close()
-                    flash(msg_spesa)
-                    return render_template("nuovo_tavolo.html")
-                _alx_pagati = int(costo_dei)
-        tavolo_id = inserisci(conn, """
-            INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali,
-                                creato_il, citta, descrizione, min_partecipanti, eta_min, eta_max, foto_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (tema, locale_id, utente_id, data_ora, obiettivo, posti,
-              datetime.now().isoformat(), citta, descrizione, minimo, eta_min, eta_max, foto_url))
-        esegui(conn,
-               "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
-               (tavolo_id, utente_id, datetime.now().isoformat()))
-        esegui(conn, "UPDATE tavoli SET tipologia = ? WHERE id = ?", (tipologia, tavolo_id))
-        if _alx_pagati:
-            esegui(conn, "UPDATE tavoli SET alx_pagati = ? WHERE id = ?", (_alx_pagati, tavolo_id))
         _r = request.form.get("raggio_km", "")
         raggio_km = int(_r) if _r in ("10", "30", "50", "100") else None
-        gusto_limite = 1 if request.form.get("gusto_limite") == "1" else 0
-        esegui(conn, "UPDATE tavoli SET raggio_km = ?, gusto_limite = ? WHERE id = ?", (raggio_km, gusto_limite, tavolo_id))
         try:
             spesa = int(request.form.get("spesa_indicativa", "").strip())
         except ValueError:
             spesa = None
-        if spesa is not None and 1 <= spesa <= 500:
-            esegui(conn, "UPDATE tavoli SET spesa_indicativa = ? WHERE id = ?", (spesa, tavolo_id))
-        dopo = request.form.get("dopo_cena", "").strip()[:120]
-        if dopo:
-            esegui(conn, "UPDATE tavoli SET dopo_cena = ? WHERE id = ?", (dopo, tavolo_id))
-        cerchio_sel = request.form.get("cerchio_id", "")
-        if cerchio_sel.isdigit():
-            _crea_posti_cerchio(conn, int(cerchio_sel), tavolo_id, utente_id, tema, posti)
-        if request.form.get("su_richiesta") == "1":
-            esegui(conn, "UPDATE tavoli SET su_richiesta = 1 WHERE id = ?", (tavolo_id,))
-        if esclusivo_sel and e_premium(conn, utente_id):
-            esegui(conn, "UPDATE tavoli SET esclusivo = 1 WHERE id = ?", (tavolo_id,))
+        if spesa is not None and not 1 <= spesa <= 500:
+            spesa = None
         try:
             lat = float(request.form.get("lat", ""))
             lng = float(request.form.get("lng", ""))
         except ValueError:
-            lat, lng = geocodifica(locale_nome, citta)
-        if lat is not None:
-            esegui(conn, "UPDATE tavoli SET lat = ?, lng = ? WHERE id = ?", (lat, lng, tavolo_id))
-        if citta:
-            destinatari = esegui(conn, """
-                SELECT id FROM utenti
-                WHERE id != ? AND LOWER(COALESCE(citta, '')) = LOWER(?) AND COALESCE(notif_tavoli, 1) = 1
-            """, (utente_id, citta)).fetchall()
-            for d in destinatari:
-                notifica(conn, d["id"], "nuovo_tavolo", locale_nome,
-                         f"{session.get('utente_nome')} ha creato un banchetto che potrebbe interessarti",
-                         url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
-        avvisati = {d["id"] for d in destinatari} if citta else set()
-        seguaci = esegui(conn, "SELECT utente_id FROM locali_seguiti WHERE locale_id = ? AND utente_id != ?",
-                         (locale_id, utente_id)).fetchall()
-        for f in seguaci:
-            if f["utente_id"] not in avvisati:
-                notifica(conn, f["utente_id"], "locale_seguito", locale_nome,
-                         "È stato creato un banchetto in un locale che segui",
-                         url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
-        for f in esegui(conn, "SELECT utente_id FROM amici WHERE amico_id = ?", (utente_id,)).fetchall():
-            if f["utente_id"] not in avvisati:
-                notifica(conn, f["utente_id"], "amico_tavolo", locale_nome,
-                         f"Il tuo amico {session.get('utente_nome')} ha creato un banchetto",
-                         url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
+            lat, lng = None, None
+        dati = {
+            "tema": tema, "locale": locale_nome, "citta": citta, "data_ora": data_ora,
+            "obiettivo": obiettivo, "descrizione": descrizione, "posti": posti, "minimo": minimo,
+            "eta_min": eta_min, "eta_max": eta_max, "tipologia": tipologia,
+            "esclusivo_sel": esclusivo_sel, "raggio_km": raggio_km,
+            "gusto_limite": 1 if request.form.get("gusto_limite") == "1" else 0,
+            "spesa": spesa, "dopo": request.form.get("dopo_cena", "").strip()[:120],
+            "cerchio_id": request.form.get("cerchio_id", ""),
+            "su_richiesta": request.form.get("su_richiesta") == "1",
+            "lat": lat, "lng": lng,
+        }
+        utente_id = session["utente_id"]
+        conn = get_db()
+        tavolo_id, errore = crea_banchetto(conn, utente_id, session.get("utente_nome"), dati)
+        if errore:
+            conn.close()
+            flash(errore)
+            return render_template("nuovo_tavolo.html")
+        ripeti = request.form.get("ripeti", "")
+        if request.form.get("salva_modello") == "1" or ripeti in ("7", "14", "28"):
+            avviso = salva_modello(conn, utente_id, dati, ripeti)
+            if avviso:
+                flash(avviso)
         conn.commit()
         conn.close()
         return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
 
     return render_template("nuovo_tavolo.html")
+
+
+def crea_banchetto(conn, utente_id, nome_utente, dati):
+    locale_nome = dati["locale"]
+    citta = dati["citta"]
+    tipologia = dati["tipologia"]
+    tema = dati["tema"]
+    posti = dati["posti"]
+    esclusivo_sel = dati["esclusivo_sel"]
+    row = esegui(conn, "SELECT id FROM locali WHERE nome = ?", (locale_nome,)).fetchone()
+    if row:
+        locale_id = row["id"]
+    else:
+        locale_id = inserisci(conn, "INSERT INTO locali (nome, indirizzo) VALUES (?, ?)", (locale_nome, ""))
+
+    _alx_pagati = 0
+    if esclusivo_sel and pagamento_attivo(conn) and not e_admin(conn, utente_id):
+        if not e_premium(conn, utente_id):
+            return None, "I banchetti degli dei sono riservati agli utenti Premium: attiva il Premium dalla pagina Premium."
+        costo_dei = prezzo_alx(conn, "prezzo_banchetto_dei", 200)
+        if costo_dei > 0:
+            ok_spesa, msg_spesa = spendi_alx(conn, utente_id, costo_dei, "banchetto_dei")
+            if not ok_spesa:
+                return None, msg_spesa
+            _alx_pagati = int(costo_dei)
+    tavolo_id = inserisci(conn, """
+        INSERT INTO tavoli (tema, locale_id, organizzatore_id, data_ora, obiettivo, posti_totali,
+                            creato_il, citta, descrizione, min_partecipanti, eta_min, eta_max, foto_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (tema, locale_id, utente_id, dati["data_ora"], dati["obiettivo"], posti,
+          datetime.now().isoformat(), citta, dati["descrizione"], dati["minimo"],
+          dati["eta_min"], dati["eta_max"], None))
+    esegui(conn,
+           "INSERT INTO iscrizioni (tavolo_id, utente_id, iscritto_il) VALUES (?, ?, ?)",
+           (tavolo_id, utente_id, datetime.now().isoformat()))
+    esegui(conn, "UPDATE tavoli SET tipologia = ? WHERE id = ?", (tipologia, tavolo_id))
+    if _alx_pagati:
+        esegui(conn, "UPDATE tavoli SET alx_pagati = ? WHERE id = ?", (_alx_pagati, tavolo_id))
+    esegui(conn, "UPDATE tavoli SET raggio_km = ?, gusto_limite = ? WHERE id = ?",
+           (dati["raggio_km"], dati["gusto_limite"], tavolo_id))
+    if dati["spesa"] is not None:
+        esegui(conn, "UPDATE tavoli SET spesa_indicativa = ? WHERE id = ?", (dati["spesa"], tavolo_id))
+    if dati["dopo"]:
+        esegui(conn, "UPDATE tavoli SET dopo_cena = ? WHERE id = ?", (dati["dopo"], tavolo_id))
+    if str(dati.get("cerchio_id", "")).isdigit():
+        _crea_posti_cerchio(conn, int(dati["cerchio_id"]), tavolo_id, utente_id, tema, posti)
+    if dati["su_richiesta"]:
+        esegui(conn, "UPDATE tavoli SET su_richiesta = 1 WHERE id = ?", (tavolo_id,))
+    if esclusivo_sel and e_premium(conn, utente_id):
+        esegui(conn, "UPDATE tavoli SET esclusivo = 1 WHERE id = ?", (tavolo_id,))
+    lat, lng = dati.get("lat"), dati.get("lng")
+    if lat is None or lng is None:
+        lat, lng = geocodifica(locale_nome, citta)
+    if lat is not None:
+        esegui(conn, "UPDATE tavoli SET lat = ?, lng = ? WHERE id = ?", (lat, lng, tavolo_id))
+    destinatari = []
+    if citta:
+        destinatari = esegui(conn, """
+            SELECT id FROM utenti
+            WHERE id != ? AND LOWER(COALESCE(citta, '')) = LOWER(?) AND COALESCE(notif_tavoli, 1) = 1
+        """, (utente_id, citta)).fetchall()
+        for d in destinatari:
+            notifica(conn, d["id"], "nuovo_tavolo", locale_nome,
+                     f"{nome_utente} ha creato un banchetto che potrebbe interessarti",
+                     url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
+    avvisati = {d["id"] for d in destinatari}
+    seguaci = esegui(conn, "SELECT utente_id FROM locali_seguiti WHERE locale_id = ? AND utente_id != ?",
+                     (locale_id, utente_id)).fetchall()
+    for f in seguaci:
+        if f["utente_id"] not in avvisati:
+            notifica(conn, f["utente_id"], "locale_seguito", locale_nome,
+                     "È stato creato un banchetto in un locale che segui",
+                     url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
+    for f in esegui(conn, "SELECT utente_id FROM amici WHERE amico_id = ?", (utente_id,)).fetchall():
+        if f["utente_id"] not in avvisati:
+            notifica(conn, f["utente_id"], "amico_tavolo", locale_nome,
+                     f"Il tuo amico {nome_utente} ha creato un banchetto",
+                     url_for("dettaglio_tavolo", tavolo_id=tavolo_id), utente_id)
+    return tavolo_id, None
+
+
+COLONNE_MODELLO = ("tipologia", "tema", "locale", "citta", "lat", "lng", "posti", "minimo", "eta_min",
+                   "eta_max", "obiettivo", "descrizione", "spesa", "dopo_cena", "raggio_km",
+                   "gusto_limite", "su_richiesta")
+
+
+def salva_modello(conn, utente_id, dati, ripeti):
+    t = TIPOLOGIE_PER_SLUG[dati["tipologia"]]
+    giorni = int(ripeti) if ripeti in ("7", "14", "28") else 0
+    avviso = None
+    if giorni and t["esclusiva"]:
+        giorni = 0
+        avviso = "I banchetti degli dei non si ripetono in automatico: il modello è stato salvato senza ripetizione."
+    prossima = None
+    if giorni:
+        prossima = (datetime.fromisoformat(dati["data_ora"]) + timedelta(days=giorni)).isoformat(timespec="minutes")
+    valori = {
+        "tipologia": dati["tipologia"], "tema": dati["tema"], "locale": dati["locale"],
+        "citta": dati["citta"], "lat": dati.get("lat"), "lng": dati.get("lng"),
+        "posti": dati["posti"], "minimo": dati["minimo"], "eta_min": dati["eta_min"],
+        "eta_max": dati["eta_max"], "obiettivo": dati["obiettivo"], "descrizione": dati["descrizione"],
+        "spesa": dati["spesa"], "dopo_cena": dati["dopo"], "raggio_km": dati["raggio_km"],
+        "gusto_limite": dati["gusto_limite"], "su_richiesta": 1 if dati["su_richiesta"] else 0,
+    }
+    esiste = esegui(conn, """
+        SELECT id FROM modelli_tavolo
+        WHERE utente_id = ? AND tipologia = ? AND locale = ? AND COALESCE(citta, '') = ?
+    """, (utente_id, dati["tipologia"], dati["locale"], dati["citta"])).fetchone()
+    if esiste:
+        imposta = ", ".join(c + " = ?" for c in COLONNE_MODELLO)
+        esegui(conn, "UPDATE modelli_tavolo SET " + imposta + ", ripeti_giorni = ?, prossima_data = ? WHERE id = ?",
+               tuple(valori[c] for c in COLONNE_MODELLO) + (giorni, prossima, esiste["id"]))
+    else:
+        nome = (t["nome"] + " - " + dati["locale"])[:80]
+        colonne = ", ".join(COLONNE_MODELLO)
+        segnaposto = ", ".join("?" for _ in COLONNE_MODELLO)
+        inserisci(conn, "INSERT INTO modelli_tavolo (utente_id, nome, " + colonne +
+                  ", ripeti_giorni, prossima_data, creato_il) VALUES (?, ?, " + segnaposto + ", ?, ?, ?)",
+                  (utente_id, nome) + tuple(valori[c] for c in COLONNE_MODELLO) +
+                  (giorni, prossima, datetime.now().isoformat()))
+    return avviso
+
+
+def blocco_creazione(conn, uid):
+    if not email_verificata(conn, uid):
+        return "Conferma la tua email per creare un banchetto: controlla la posta."
+    f = esegui(conn, "SELECT foto_url FROM utenti WHERE id = ?", (uid,)).fetchone()
+    if not f or not (f["foto_url"] or "").strip():
+        return "Aggiungi una foto personale al tuo profilo per creare un banchetto."
+    n = int(esegui(conn, "SELECT COUNT(*) AS n FROM assenze WHERE utente_id = ? AND creato_il > ?",
+                   (uid, (adesso_it().replace(tzinfo=None) - timedelta(days=60)).isoformat())).fetchone()["n"])
+    if n >= 3:
+        return "Hai saltato troppi banchetti negli ultimi 60 giorni: per ora non puoi crearne di nuovi."
+    return None
+
+
+def dati_da_modello(m, data_ora):
+    t = TIPOLOGIE_PER_SLUG.get(m["tipologia"])
+    return {
+        "tema": (m["tema"] or "").strip() or (t["nome"] + " - " + m["locale"] if t else m["locale"]),
+        "locale": m["locale"], "citta": m["citta"] or "", "data_ora": data_ora,
+        "obiettivo": m["obiettivo"] or "", "descrizione": m["descrizione"] or "",
+        "posti": int(m["posti"] or 8), "minimo": int(m["minimo"] or 4),
+        "eta_min": int(m["eta_min"] or 18), "eta_max": int(m["eta_max"] or 65),
+        "tipologia": m["tipologia"], "esclusivo_sel": bool(t and t["esclusiva"]),
+        "raggio_km": m["raggio_km"], "gusto_limite": int(m["gusto_limite"] or 0),
+        "spesa": m["spesa"], "dopo": m["dopo_cena"] or "", "cerchio_id": "",
+        "su_richiesta": bool(m["su_richiesta"]), "lat": m["lat"], "lng": m["lng"],
+    }
+
+
+def crea_ricorrenze(conn):
+    creati = 0
+    ora = adesso_it()
+    modelli = esegui(conn, """
+        SELECT m.*, u.nome AS nome_utente FROM modelli_tavolo m
+        JOIN utenti u ON u.id = m.utente_id
+        WHERE COALESCE(m.ripeti_giorni, 0) > 0 AND m.prossima_data IS NOT NULL
+          AND COALESCE(u.sospeso, 0) = 0
+    """).fetchall()
+    for m in modelli:
+        passo = timedelta(days=int(m["ripeti_giorni"]))
+        try:
+            prossima = datetime.fromisoformat(m["prossima_data"])
+        except (TypeError, ValueError):
+            continue
+        cambiato = False
+        for _ in range(6):
+            if prossima - timedelta(days=7) > ora:
+                break
+            if prossima > ora and not blocco_creazione(conn, m["utente_id"]) and m["tipologia"] in TIPOLOGIE_PER_SLUG:
+                data_ora = prossima.isoformat(timespec="minutes")
+                tavolo_id, errore = crea_banchetto(conn, m["utente_id"], m["nome_utente"],
+                                                   dati_da_modello(m, data_ora))
+                if tavolo_id:
+                    notifica(conn, m["utente_id"], "nuovo_tavolo", m["locale"],
+                             "Ho creato il tuo banchetto ricorrente: " + m["nome"],
+                             url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+                    creati += 1
+            prossima += passo
+            cambiato = True
+        if cambiato:
+            esegui(conn, "UPDATE modelli_tavolo SET prossima_data = ? WHERE id = ?",
+                   (prossima.isoformat(timespec="minutes"), m["id"]))
+    return creati
+
+
+@app.route("/modelli")
+@login_richiesto
+def modelli():
+    conn = get_db()
+    righe = esegui(conn, "SELECT * FROM modelli_tavolo WHERE utente_id = ? ORDER BY id DESC",
+                   (session["utente_id"],)).fetchall()
+    conn.close()
+    return render_template("modelli.html", modelli=righe)
+
+
+def _modello_proprio(conn, mid):
+    m = esegui(conn, "SELECT * FROM modelli_tavolo WHERE id = ? AND utente_id = ?",
+               (mid, session["utente_id"])).fetchone()
+    if not m:
+        conn.close()
+        abort(404)
+    return m
+
+
+@app.route("/modelli/<int:mid>/crea", methods=["POST"])
+@login_richiesto
+def modello_crea(mid):
+    conn = get_db()
+    m = _modello_proprio(conn, mid)
+    data_ora = request.form.get("data_ora", "").strip()
+    try:
+        quando = datetime.fromisoformat(data_ora)
+    except ValueError:
+        conn.close()
+        flash("Scegli la data e l'ora del banchetto.")
+        return redirect(url_for("modelli"))
+    if quando <= adesso_it():
+        conn.close()
+        flash("La data del banchetto deve essere nel futuro.")
+        return redirect(url_for("modelli"))
+    blocco = blocco_creazione(conn, session["utente_id"])
+    if blocco:
+        conn.close()
+        flash(blocco)
+        return redirect(url_for("modelli"))
+    tavolo_id, errore = crea_banchetto(conn, session["utente_id"], session.get("utente_nome"),
+                                       dati_da_modello(m, quando.isoformat(timespec="minutes")))
+    if errore:
+        conn.close()
+        flash(errore)
+        return redirect(url_for("modelli"))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("dettaglio_tavolo", tavolo_id=tavolo_id))
+
+
+@app.route("/modelli/<int:mid>/ripeti", methods=["POST"])
+@login_richiesto
+def modello_ripeti(mid):
+    conn = get_db()
+    m = _modello_proprio(conn, mid)
+    scelta = request.form.get("ripeti", "")
+    giorni = int(scelta) if scelta in ("7", "14", "28") else 0
+    t = TIPOLOGIE_PER_SLUG.get(m["tipologia"])
+    if giorni and t and t["esclusiva"]:
+        conn.close()
+        flash("I banchetti degli dei non si ripetono in automatico.")
+        return redirect(url_for("modelli"))
+    prossima = None
+    if giorni:
+        try:
+            prossima = datetime.fromisoformat(request.form.get("data_ora", "").strip())
+        except ValueError:
+            conn.close()
+            flash("Scegli la data e l'ora del prossimo banchetto.")
+            return redirect(url_for("modelli"))
+        if prossima <= adesso_it():
+            conn.close()
+            flash("La data del prossimo banchetto deve essere nel futuro.")
+            return redirect(url_for("modelli"))
+        prossima = prossima.isoformat(timespec="minutes")
+    esegui(conn, "UPDATE modelli_tavolo SET ripeti_giorni = ?, prossima_data = ? WHERE id = ?",
+           (giorni, prossima, mid))
+    conn.commit()
+    conn.close()
+    flash("Ripetizione aggiornata.")
+    return redirect(url_for("modelli"))
+
+
+@app.route("/modelli/<int:mid>/elimina", methods=["POST"])
+@login_richiesto
+def modello_elimina(mid):
+    conn = get_db()
+    _modello_proprio(conn, mid)
+    esegui(conn, "DELETE FROM modelli_tavolo WHERE id = ?", (mid,))
+    conn.commit()
+    conn.close()
+    flash("Modello eliminato.")
+    return redirect(url_for("modelli"))
 
 
 @app.route("/tavolo/<int:tavolo_id>/iscriviti", methods=["POST"])
