@@ -5483,11 +5483,31 @@ for _c, _t, _x in ((403, "Accesso negato", "Non hai i permessi per aprire questa
     app.register_error_handler(_c, _gestore_errore(_c, _t, _x))
 
 
+PAGINE_PUBBLICHE = ("/benvenuto", "/hai-un-locale", "/privacy", "/termini", "/faq")
+
+
 @app.route("/robots.txt")
 def robots():
     from flask import Response as _Resp
-    corpo = "User-agent: *\nAllow: /benvenuto\nAllow: /hai-un-locale\nAllow: /privacy\nAllow: /termini\nAllow: /faq\nDisallow: /\n"
+    corpo = "User-agent: *\nAllow: /\nSitemap: " + request.url_root.replace("http://", "https://").rstrip("/") + "/sitemap.xml\n"
     return _Resp(corpo, mimetype="text/plain")
+
+
+@app.route("/sitemap.xml")
+def sitemap():
+    from flask import Response as _Resp
+    base = request.url_root.replace("http://", "https://").rstrip("/")
+    righe = "".join("<url><loc>" + base + u + "</loc></url>" for u in PAGINE_PUBBLICHE)
+    corpo = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + righe + "</urlset>"
+    return _Resp(corpo, mimetype="application/xml")
+
+
+@app.after_request
+def non_indicizzare_aree_private(risposta):
+    # Le pagine private restano accessibili al crawler ma con noindex: così Google le toglie dall'indice.
+    if request.path not in PAGINE_PUBBLICHE and request.path not in ("/", "/robots.txt", "/sitemap.xml"):
+        risposta.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return risposta
 
 
 @app.after_request
